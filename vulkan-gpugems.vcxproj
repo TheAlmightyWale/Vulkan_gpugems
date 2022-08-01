@@ -87,8 +87,9 @@
     <LinkIncremental>false</LinkIncremental>
     <IncludePath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\include\GLFW;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\lib-vc2022;$(VULKAN_SDK)\Lib\;$(LibraryPath)</LibraryPath>
-    <RunCodeAnalysis>true</RunCodeAnalysis>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
     <CodeAnalysisRuleSet>core_guidlines.ruleset</CodeAnalysisRuleSet>
+    <EnableMicrosoftCodeAnalysis>false</EnableMicrosoftCodeAnalysis>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -171,6 +172,7 @@
       <ConformanceMode>true</ConformanceMode>
       <EnablePREfast>true</EnablePREfast>
       <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include\Volk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -192,6 +194,7 @@
   <ItemGroup>
     <ClCompile Include="App.cpp" />
     <ClCompile Include="GfxApiInstance.cpp" />
+    <ClCompile Include="GfxBuffer.cpp" />
     <ClCompile Include="GfxDevice.cpp" />
     <ClCompile Include="GfxEngine.cpp" />
     <ClCompile Include="GfxPipelineBuilder.cpp" />
@@ -200,8 +203,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
+    <ClInclude Include="Cube.h" />
     <ClInclude Include="Exceptions.h" />
     <ClInclude Include="GfxApiInstance.h" />
+    <ClInclude Include="GfxBuffer.h" />
     <ClInclude Include="GfxDevice.h" />
     <ClInclude Include="GfxEngine.h" />
     <ClInclude Include="GfxFrame.h" />
@@ -213,6 +218,7 @@
     <ClInclude Include="GfxUniformBuffer.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Math.h" />
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>

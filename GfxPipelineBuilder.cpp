@@ -1,5 +1,6 @@
 #include "GfxPipelineBuilder.h"
 #include "GfxUniformBuffer.h"
+#include "Mesh.h"
 
 vk::raii::Pipeline GfxPipelineBuilder::BuildPipeline(vk::raii::Device const& device, vk::RenderPass renderPass)
 {
@@ -9,6 +10,15 @@ vk::raii::Pipeline GfxPipelineBuilder::BuildPipeline(vk::raii::Device const& dev
         VK_FALSE, //Logic Op enable
         vk::LogicOp::eCopy, //Logic op
         _colorBlendAttachment);
+
+    vk::VertexInputBindingDescription description(0, sizeof(Vertex)); //Vertex should be 4 * 6 = 24bytes
+    std::array<vk::VertexInputAttributeDescription, 2> attributes =
+    {
+        vk::VertexInputAttributeDescription(0 /*location*/, 0 /*binding*/, vk::Format::eR32G32B32Sfloat, 0/*offset*/),
+        vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, 12 /*3 floats from position*/)
+    };
+    vk::PipelineVertexInputStateCreateInfo createInfo({}, description, attributes);
+    _vertexInputInfo = createInfo;
 
     vk::GraphicsPipelineCreateInfo pipelineInfo(
         {},
@@ -50,9 +60,16 @@ vk::PipelineShaderStageCreateInfo GfxPipelineBuilder::CreateShaderStageInfo(vk::
     return createInfo;
 }
 
+//TODO move to shader based vertex attributes?
 vk::PipelineVertexInputStateCreateInfo GfxPipelineBuilder::CreateVertexInputStateInfo()
 {
-    vk::PipelineVertexInputStateCreateInfo createInfo({}, nullptr, nullptr);
+    vk::VertexInputBindingDescription description(0, sizeof(Vertex)); //Vertex should be 4 * 6 = 24bytes
+    std::array<vk::VertexInputAttributeDescription, 2> attributes =
+    {
+        vk::VertexInputAttributeDescription(0 /*location*/, 0 /*binding*/, vk::Format::eR32G32B32Sfloat, 0/*offset*/),
+        vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, 12 /*3 floats from position*/)
+    };
+    vk::PipelineVertexInputStateCreateInfo createInfo({}, description, attributes);
 
     return createInfo;
 }
@@ -109,10 +126,9 @@ vk::PipelineColorBlendAttachmentState GfxPipelineBuilder::CreateColorBlendAttach
     return createInfo;
 }
 
-vk::raii::PipelineLayout GfxPipelineBuilder::CreatePipelineLayout(vk::raii::Device const& device)
+vk::raii::PipelineLayout GfxPipelineBuilder::CreatePipelineLayout(vk::raii::Device const& device, vk::PushConstantRange pushConstant)
 {
-    //Empty layout for now
-    vk::PipelineLayoutCreateInfo createInfo;
+    vk::PipelineLayoutCreateInfo createInfo({}/*flags*/, {}/*descriptor sets*/, pushConstant);
     vk::raii::PipelineLayout layout(device, createInfo);
 
     return std::move(layout);

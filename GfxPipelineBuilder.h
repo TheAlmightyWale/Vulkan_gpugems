@@ -30,7 +30,7 @@ public:
 		vk::Format depthSurfaceFormat,
 		vk::ArrayProxyNoTemporaries<vk::AttachmentDescription const> const& attachments
 	);
-	static vk::raii::PipelineLayout CreatePipelineLayout(vk::raii::Device const& device);
+	static vk::raii::PipelineLayout CreatePipelineLayout(vk::raii::Device const& device, vk::PushConstantRange pushConstant);
 
 };
 

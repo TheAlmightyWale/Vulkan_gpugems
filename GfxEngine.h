@@ -5,6 +5,8 @@
 #include "GfxFrame.h"
 #include "GfxImage.h"
 #include "GfxPipeline.h"
+#include "Mesh.h"
+#include "GfxBuffer.h"
 
 std::string const k_engineName = "Vulkan?";
 uint32_t const k_engineVersion = 1;
@@ -41,6 +43,10 @@ private:
 	//Rendering semaphores
 	vk::raii::Semaphore m_aquireImageSemaphore;
 	vk::raii::Semaphore m_readyToPresentSemaphore;
+
+	Mesh m_cube;
+	GfxBuffer m_cubeVertexBuffer;
+	GfxBuffer m_cubeIndexBuffer;
 
 };
 

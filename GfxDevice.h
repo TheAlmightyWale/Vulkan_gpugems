@@ -17,6 +17,7 @@ public:
 	GfxImage CreateDepthStencil(uint32_t width, uint32_t height);
 	GfxUniformBuffer CreateUniformBuffer(uint8_t* pDataSource, vk::DeviceSize numBytes, vk::SharingMode sharingMode);
 	vk::raii::Semaphore CreateVkSemaphore();
+	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlags flags);
 	
 	vk::Queue GetGraphicsQueue();
 	vk::raii::Device const& GetDevice() const noexcept { return *m_pDevice.get(); }

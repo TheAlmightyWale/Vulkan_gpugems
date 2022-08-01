@@ -11,8 +11,35 @@
 
 #include <fstream>
 
-//Temp for uniform buffer testing, move to camera class 
+//TODO Temp for uniform buffer testing, move to camera class 
 #include "Math.h"
+
+//TODO move somewhere else also
+#include "Cube.h"
+Mesh LoadCube()
+{
+	Mesh cube;
+	for (uint32_t i = 0; i < k_cubeVertexValuesCount; i+= 3)
+	{
+		Vertex v;
+		v.vx = k_cubeVertices[i + 0];
+		v.vy = k_cubeVertices[i + 1];
+		v.vz = k_cubeVertices[i + 2];
+
+		v.nx = k_cubeNormals[i + 0];
+		v.ny = k_cubeNormals[i + 1];
+		v.nz = k_cubeNormals[i + 2];
+
+		cube.vertices.push_back(v);
+	}
+
+	for (uint16_t index : k_cubeIndices)
+	{
+		cube.indices.push_back(index);
+	}
+
+	return cube;
+}
 
 //TODO wrap extensions and layers into configurable features?
 std::vector<const char*> const k_deviceExtensions{
@@ -21,7 +48,7 @@ std::vector<const char*> const k_deviceExtensions{
 };
 
 std::vector<const char*> const k_deviceLayers{
-	//Empty for now
+	//Deprecated, but might be needed for backwards compatibility if we ever want it
 };
 
 GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow)
@@ -138,7 +165,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		m_frames[i].frameBuffer = vk::raii::Framebuffer(m_pDevice->GetDevice(), frameBufferCreateInfo);
 	}
 
-	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice());
+	vk::PushConstantRange mvpMatrixPush(vk::ShaderStageFlagBits::eVertex, 0/*offset*/, sizeof(glm::mat4x4));
+	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), mvpMatrixPush);
 
 	GfxPipelineBuilder builder;
 	builder._shaderStages.push_back(
@@ -148,7 +176,6 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		GfxPipelineBuilder::CreateShaderStageInfo(vk::ShaderStageFlagBits::eFragment, *fragmentShader)
 	);
 
-	builder._vertexInputInfo = GfxPipelineBuilder::CreateVertexInputStateInfo();
 	builder._inputAssembly = GfxPipelineBuilder::CreateInputAssemblyInfo(vk::PrimitiveTopology::eTriangleList);
 	builder._viewport.setX(0.0f);
 	builder._viewport.setY((float)height);
@@ -157,23 +184,35 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	builder._viewport.setMinDepth(0.0f);
 	builder._viewport.setMaxDepth(1.0f);
 
-	builder._scissor.setOffset({ 0, 0 });
+	builder._scissor.setOffset({ 0, 0 }); 
 	builder._scissor.setExtent({ width, height });
 
 	builder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill);
 	builder._multisampling = GfxPipelineBuilder::CreateMultisampleStateInfo();
 	builder._colorBlendAttachment = GfxPipelineBuilder::CreateColorBlendAttachmentState();
 	builder._pipelineLayout = *m_pipeline.layout;
+	//builder._vertexInputInfo = GfxPipelineBuilder::CreateVertexInputStateInfo(); TODO lifetime of this was weird?
 
 	m_pipeline.pipeline = builder.BuildPipeline(m_pDevice->GetDevice(), *m_renderPass);
 
 	m_aquireImageSemaphore = m_pDevice->CreateVkSemaphore();
 	m_readyToPresentSemaphore = m_pDevice->CreateVkSemaphore();
+
+	//Todo move scene loading somewhere else
+	// good rust candidate?
+	Mesh cube = LoadCube();
+	m_cubeVertexBuffer = m_pDevice->CreateBuffer(cube.vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
+	m_cubeIndexBuffer = m_pDevice->CreateBuffer(cube.indices.size() * sizeof(uint16_t), vk::BufferUsageFlagBits::eIndexBuffer);
+
+	memcpy(m_cubeVertexBuffer.m_pData, cube.vertices.data(), m_cubeVertexBuffer.m_dataSize);
+	memcpy(m_cubeIndexBuffer.m_pData, cube.indices.data(), m_cubeIndexBuffer.m_dataSize);
 }
 
 GfxEngine::~GfxEngine()
 {
 }
+
+static uint32_t frameNum = 0;
 
 void GfxEngine::Render()
 {
@@ -185,15 +224,28 @@ void GfxEngine::Render()
 	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	m_graphicsCommandBuffer.begin(beginInfo);
 
-
 	vk::ClearColorValue const k_clearColor(std::array<float, 4>{48.0f / 2550.f, 10.0f / 255.0f, 36.0f / 255.0f, 1.0f});
 	vk::ClearValue const clearValue{ k_clearColor };
 	vk::Rect2D const renderArea({ 0,0 }, m_swapChain.m_extent);
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *m_frames[imageIndex].frameBuffer, renderArea, clearValue);
 
+	//TODO move out
+	glm::vec3 camPos = { 0.0f,0.0f, -2.0f };
+	glm::mat4 view = glm::translate(glm::identity<glm::mat4>(), camPos);
+	float aspectRatio = m_swapChain.m_extent.width / m_swapChain.m_extent.height;
+	glm::mat4 proj = glm::perspective(glm::radians(70.0f), aspectRatio, 0.1f, 100.0f);
+	//Rotate cube
+	glm::mat4 model = glm::rotate(glm::identity<glm::mat4>(), glm::radians(frameNum * 0.4f), glm::vec3(0.5f,0.5f, 0.0f));
+	glm::mat4 mvp = proj * view * model;
+
 	m_graphicsCommandBuffer.beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
 	m_graphicsCommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
-	m_graphicsCommandBuffer.draw(3, 1, 0, 0);
+	vk::DeviceSize dummyOffset(0);
+	m_graphicsCommandBuffer.bindVertexBuffers(0/*first binding*/, *m_cubeVertexBuffer.m_buffer, dummyOffset);
+	m_graphicsCommandBuffer.bindIndexBuffer(*m_cubeIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint16);
+	m_graphicsCommandBuffer.pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
+	m_graphicsCommandBuffer.drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
+	
 	m_graphicsCommandBuffer.endRenderPass();
 
 	m_graphicsCommandBuffer.end();
@@ -209,6 +261,8 @@ void GfxEngine::Render()
 
 	//TODO wait on a render finished semaphore properly
 	m_pDevice->GetDevice().waitIdle();
+
+	frameNum++;
 }
 
 vk::raii::ShaderModule GfxEngine::LoadShaderModule(std::string const& filePath)

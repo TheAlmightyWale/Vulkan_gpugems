@@ -93,6 +93,7 @@ GfxApiInstance::GfxApiInstance(std::string const& applicationName, uint32_t appV
 	SPDLOG_INFO("Loading Vulkan functions");
 	VULKAN_HPP_DEFAULT_DISPATCHER.init(**m_pInstance);
 	
+#ifdef DEBUG
 	vk::DebugUtilsMessageSeverityFlagsEXT const severityFlags(
 		vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
 		vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
@@ -109,7 +110,8 @@ GfxApiInstance::GfxApiInstance(std::string const& applicationName, uint32_t appV
 			messageTypeFlags,
 			&debugMessageFunc
 		)
-	);	
+	);
+#endif // DEBUG
 }
 
 GfxApiInstance::~GfxApiInstance()

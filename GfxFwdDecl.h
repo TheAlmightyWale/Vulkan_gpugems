@@ -19,3 +19,4 @@ struct GfxPipeline;
 struct GfxSwapchain;
 class GfxEngine;
 struct GfxFrame;
+struct GfxBuffer;

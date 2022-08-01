@@ -3,6 +3,7 @@
 #include "GfxUniformBuffer.h"
 #include "GfxPipeline.h"
 #include "GfxSwapChain.h"
+#include "GfxBuffer.h"
 #include "Exceptions.h"
 #include "Logger.h"
 #include <bitset>
@@ -317,6 +318,39 @@ vk::raii::Semaphore GfxDevice::CreateVkSemaphore()
 	vk::raii::Semaphore semaphore(*m_pDevice.get(), createInfo);
 
 	return std::move(semaphore);
+}
+
+GfxBuffer GfxDevice::CreateBuffer(size_t size, vk::BufferUsageFlags flags)
+{
+	vk::BufferCreateInfo createInfo(
+		{},
+		size,
+		flags,
+		vk::SharingMode::eExclusive
+	);
+
+	vk::raii::Buffer buffer(*m_pDevice, createInfo);
+
+	vk::DeviceBufferMemoryRequirements devBuffMemReq(&createInfo);
+	vk::MemoryRequirements memoryRequirements = buffer.getMemoryRequirements();
+	uint32_t memoryTypeIndex = FindMemoryType(m_physcialDevice.getMemoryProperties(), memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+	uint32_t finalSize = size >= memoryRequirements.size ? size : memoryRequirements.size;
+	vk::MemoryAllocateInfo allocateInfo(finalSize, memoryTypeIndex);
+
+	vk::raii::DeviceMemory memory = m_pDevice->allocateMemory(allocateInfo);
+	vk::BindBufferMemoryInfo bindInfo(*buffer, *memory, 0 /*offset*/);
+	m_pDevice->bindBufferMemory2(bindInfo);
+
+	void* pData = memory.mapMemory(0 /*offset*/, size, {} /*flags*/);
+
+	GfxBuffer result;
+	result.m_buffer = std::move(buffer);
+	result.m_memory = std::move(memory);
+	result.m_dataSize = size;
+	result.m_pData = pData;
+
+	return std::move(result);
 }
 
 vk::raii::CommandPool GfxDevice::CreateGraphicsCommandPool()

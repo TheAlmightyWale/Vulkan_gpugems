@@ -1,13 +1,16 @@
 #version 450
-#extension GL_KHR_vulkan_glsl: enable
+
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 normal;
+
+layout(push_constant) uniform PushConstants {
+	mat4 mvp;
+} pcs;
+
+layout(location = 0) out vec4 color;
 
 void main()
 {
-	const vec3 positions[3] = vec3[3](
-		vec3(0.f,0.5f, 0.0f),
-		vec3(0.5f,-0.5f, 0.0f),
-		vec3(-0.5f,-0.5f,0.0f)
-	);
-
-	gl_Position = vec4(positions[gl_VertexIndex], 1.0f);
+	gl_Position = pcs.mvp * vec4(position, 1.0);
+	color = vec4(normal * 0.5 + vec3(0.5), 1.0);
 }
