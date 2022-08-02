@@ -17,12 +17,15 @@ public:
 	virtual ~Window();
 
 	WindowDimensions GetWindowSize() const;
+	uint32_t GetWindowWidth() const;
+	uint32_t GetWindowHeight() const;
 	bool ShouldClose() const noexcept;
 
 	GLFWwindow* Get() const noexcept { return m_pWindow; }
 
 private:
 	GLFWwindow* m_pWindow;
+	WindowDimensions m_windowSize;
 };
 
 using WindowPtr_t = std::shared_ptr<Window>;

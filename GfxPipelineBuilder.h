@@ -13,6 +13,7 @@ public:
 	vk::PipelineRasterizationStateCreateInfo _rasterizer;
 	vk::PipelineColorBlendAttachmentState _colorBlendAttachment;
 	vk::PipelineMultisampleStateCreateInfo _multisampling;
+	vk::PipelineDepthStencilStateCreateInfo _depthStencil;
 	vk::PipelineLayout _pipelineLayout;
 
 	vk::raii::Pipeline BuildPipeline(vk::raii::Device const& device, vk::RenderPass pass);
@@ -23,9 +24,9 @@ public:
 	static vk::PipelineRasterizationStateCreateInfo CreateRasterizationStateInfo(vk::PolygonMode polygonMode);
 	static vk::PipelineMultisampleStateCreateInfo CreateMultisampleStateInfo();
 	static vk::PipelineColorBlendAttachmentState CreateColorBlendAttachmentState();
+	static vk::PipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 	static vk::raii::RenderPass CreateRenderPass(
 		vk::raii::Device const& device,
-		GfxUniformBuffer const& descriptorBuffer,
 		vk::Format renderSurfaceFormat,
 		vk::Format depthSurfaceFormat,
 		vk::ArrayProxyNoTemporaries<vk::AttachmentDescription const> const& attachments

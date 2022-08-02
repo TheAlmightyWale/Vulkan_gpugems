@@ -1,5 +1,4 @@
 #include "GfxPipelineBuilder.h"
-#include "GfxUniformBuffer.h"
 #include "Mesh.h"
 
 vk::raii::Pipeline GfxPipelineBuilder::BuildPipeline(vk::raii::Device const& device, vk::RenderPass renderPass)
@@ -29,7 +28,7 @@ vk::raii::Pipeline GfxPipelineBuilder::BuildPipeline(vk::raii::Device const& dev
         &viewportStateCreateInfo,
         &_rasterizer,
         &_multisampling,
-        nullptr /* depth stencil state*/,
+        &_depthStencil /* depth stencil state*/,
         &colorBlending,
         nullptr /*dynamic state*/,
         _pipelineLayout,
@@ -86,9 +85,9 @@ vk::PipelineRasterizationStateCreateInfo GfxPipelineBuilder::CreateRasterization
     vk::PipelineRasterizationStateCreateInfo createInfo(
         {},
         VK_FALSE, //Depth Clamp enable
-        VK_FALSE, //Rasterizer disacard enabled
+        VK_FALSE, //Rasterizer discard enabled
         polygonMode,
-        vk::CullModeFlagBits::eNone,
+        vk::CullModeFlagBits::eBack,
         vk::FrontFace::eClockwise,
         VK_FALSE, //Depth bias enable
         0.0f, //DepthBias constant
@@ -136,40 +135,56 @@ vk::raii::PipelineLayout GfxPipelineBuilder::CreatePipelineLayout(vk::raii::Devi
 
 vk::raii::RenderPass GfxPipelineBuilder::CreateRenderPass(
     vk::raii::Device const& device,
-    GfxUniformBuffer const& descriptorBuffer,
     vk::Format renderSurfaceFormat,
     vk::Format depthSurfaceFormat,
     vk::ArrayProxyNoTemporaries<vk::AttachmentDescription const> const& attachments
 )
 {
-    //vk::DescriptorType descriptor = vk::DescriptorType::eUniformBuffer;
-    //uint32_t descriptorCount = 1;
-
-    //vk::DescriptorSetLayoutBinding layoutBinding(0 /*binding*/, descriptor, descriptorCount, vk::ShaderStageFlagBits::eVertex);
-    //vk::DescriptorSetLayoutCreateInfo layoutCreateInfo({}/*flags*/, layoutBinding);
-    //vk::raii::DescriptorSetLayout layout(device, layoutCreateInfo);
-
-    //vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, *layout);
-    //vk::raii::PipelineLayout pipelineLayout(device, pipelineLayoutCreateInfo);
-
-    //vk::DescriptorPoolSize poolSize(descriptor, descriptorCount);
-    //vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 1 /*maxSets*/, poolSize);
-    //vk::raii::DescriptorPool descriptorPool(device, descriptorPoolCreateInfo);
-
-    //vk::DescriptorSetAllocateInfo allocateInfo(*descriptorPool, *layout);
-    //vk::raii::DescriptorSet descriptorSet = std::move(vk::raii::DescriptorSets(device, allocateInfo).front());
-
-    ////TODO move writing/binding of descriptorsets into pipeline object
-    //vk::DescriptorBufferInfo uniformBuffer(*descriptorBuffer.buffer, 0/*offset*/, descriptorBuffer.buffer.getMemoryRequirements().size);
-    //vk::WriteDescriptorSet descriptorWrite(*descriptorSet, 0/*binding*/, 1 /*array element*/, descriptor, nullptr, uniformBuffer);
-    ////m_pDevice->updateDescriptorSets(descriptorWrite, nullptr);
-
     //TODO bundle attachment description and references together rather than hardcode here
     vk::AttachmentReference colorReference(0/*attachment*/, vk::ImageLayout::eColorAttachmentOptimal);
-    //vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthAttachmentOptimal);
-    //TODO: add depth
-    vk::SubpassDescription subpass({} /*flags*/, vk::PipelineBindPoint::eGraphics, {}/*input attachments*/, colorReference, {}/*resolve attachments*/, nullptr/*&depthReference*/);
+    vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+    vk::SubpassDescription subpass({} /*flags*/, vk::PipelineBindPoint::eGraphics, {}/*input attachments*/, colorReference, {}/*resolve attachments*/, &depthReference);
 
-    vk::RenderPassCreateInfo renderPassCreateInfo({}, attachments, subpass);
+    vk::SubpassDependency colorAttachmentDependency(
+        VK_SUBPASS_EXTERNAL,
+        0 /*dst subpass*/,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput/*srcStage*/,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput/*dstStage*/,
+        vk::AccessFlagBits::eNone /*src access mask*/,
+        vk::AccessFlagBits::eColorAttachmentWrite,
+        {} /*dependency flags*/
+    );
+
+    vk::SubpassDependency depthDependency(
+        VK_SUBPASS_EXTERNAL,
+        0,
+        vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
+        vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
+        vk::AccessFlagBits::eNone,
+        vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+        {}
+    );
+
+    std::array<vk::SubpassDependency, 2> dependencies;
+    dependencies[0] = colorAttachmentDependency;
+    dependencies[1] = depthDependency;
+
+    vk::RenderPassCreateInfo renderPassCreateInfo({}, attachments, subpass, dependencies);
     return std::move(vk::raii::RenderPass(device, renderPassCreateInfo));
+}
+
+vk::PipelineDepthStencilStateCreateInfo GfxPipelineBuilder::CreateDepthStencilStateInfo()
+{
+    vk::PipelineDepthStencilStateCreateInfo createInfo(
+        {},
+        VK_TRUE /*enable test*/,
+        VK_TRUE /*enable writes to depth buffer*/,
+        vk::CompareOp::eLess /*comparision of fragment to already written value*/,
+        VK_FALSE /*bounds test*/,
+        VK_FALSE /*stencil test*/,
+        vk::StencilOp::eZero /*unused stencil ops*/,
+        vk::StencilOp::eZero,
+        0.0f /*min depth bound*/,
+        1.0f /*max depth bound*/);
+    return createInfo;
 }

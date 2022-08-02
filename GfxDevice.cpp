@@ -1,6 +1,5 @@
 #include "GfxDevice.h"
 #include "GfxImage.h"
-#include "GfxUniformBuffer.h"
 #include "GfxPipeline.h"
 #include "GfxSwapChain.h"
 #include "GfxBuffer.h"
@@ -235,10 +234,9 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::raii::SurfaceKHR const& surface)
 	return gfxSwapchain;
 }
 
-GfxImage GfxDevice::CreateDepthStencil(uint32_t width, uint32_t height)
+GfxImage GfxDevice::CreateDepthStencil(uint32_t width, uint32_t height, vk::Format depthFormat)
 {
-	vk::ImageAspectFlags aspect = vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
-	vk::Format const depthFormat = vk::Format::eD16Unorm;
+	vk::ImageAspectFlags aspect = vk::ImageAspectFlagBits::eDepth;
 	vk::ImageCreateInfo depthStencilCreateInfo{
 		{} /*flags*/,
 		vk::ImageType::e2D,
@@ -256,7 +254,7 @@ GfxImage GfxDevice::CreateDepthStencil(uint32_t width, uint32_t height)
 	vk::PhysicalDeviceMemoryProperties memoryProperties = m_physcialDevice.getMemoryProperties();
 	vk::MemoryRequirements memoryRequirements = depthImage.getMemoryRequirements();
 
-	uint32_t typeIndex = FindMemoryType(memoryProperties, memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
+	uint32_t typeIndex = FindMemoryType(memoryProperties, memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
 	vk::MemoryAllocateInfo memoryAllocateInfo(memoryRequirements.size, typeIndex);
 	vk::raii::DeviceMemory depthMemory(*m_pDevice.get(), memoryAllocateInfo);
@@ -285,31 +283,6 @@ GfxImage GfxDevice::CreateDepthStencil(uint32_t width, uint32_t height)
 	depthStencil.view = std::move(depthView);
 	depthStencil.memory = std::move(depthMemory);
 	return depthStencil;
-}
-
-GfxUniformBuffer GfxDevice::CreateUniformBuffer(uint8_t* pDataSource, vk::DeviceSize numBytes, vk::SharingMode sharingMode)
-{
-	vk::BufferCreateInfo createInfo({} /*flags*/, numBytes, vk::BufferUsageFlagBits::eUniformBuffer, sharingMode);
-	vk::raii::Buffer uniformDataBuffer(*m_pDevice.get(), createInfo);
-	vk::MemoryRequirements memoryRequirements = uniformDataBuffer.getMemoryRequirements();
-
-	uint32_t memoryTypeIndex = FindMemoryType(
-		m_physcialDevice.getMemoryProperties(),
-		memoryRequirements.memoryTypeBits,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent); //TODO HostCoherent less efficient?
-	vk::MemoryAllocateInfo memoryAllocateInfo(memoryRequirements.size, memoryTypeIndex);
-	vk::raii::DeviceMemory uniformDataMemory(*m_pDevice.get(), memoryAllocateInfo);
-
-	uint8_t* pDataDestination = static_cast<uint8_t *>(uniformDataMemory.mapMemory(0 /*offset*/, memoryRequirements.size, {}/*flags*/));
-	memcpy(pDataDestination, pDataSource, numBytes);
-	uniformDataMemory.unmapMemory();
-	uniformDataBuffer.bindMemory(*uniformDataMemory, 0/*offset*/);
-
-	GfxUniformBuffer uniformBuffer;
-	uniformBuffer.buffer = std::move(uniformDataBuffer);
-	uniformBuffer.memory = std::move(uniformDataMemory);
-
-	return uniformBuffer;
 }
 
 vk::raii::Semaphore GfxDevice::CreateVkSemaphore()

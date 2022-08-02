@@ -14,8 +14,7 @@ public:
 	vk::raii::CommandPool CreateGraphicsCommandPool();
 	vk::raii::CommandBuffers CreateCommandBuffers(vk::raii::CommandPool const& commandPool, uint32_t numBuffers);
 	GfxSwapchain CreateSwapChain(vk::raii::SurfaceKHR const& surface);
-	GfxImage CreateDepthStencil(uint32_t width, uint32_t height);
-	GfxUniformBuffer CreateUniformBuffer(uint8_t* pDataSource, vk::DeviceSize numBytes, vk::SharingMode sharingMode);
+	GfxImage CreateDepthStencil(uint32_t width, uint32_t height, vk::Format depthFormat);
 	vk::raii::Semaphore CreateVkSemaphore();
 	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlags flags);
 	

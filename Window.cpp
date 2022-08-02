@@ -2,6 +2,8 @@
 #include "Exceptions.h"
 
 Window::Window(WindowDimensions windowSize, std::string const& windowName)
+	: m_windowSize(windowSize)
+	, m_pWindow(nullptr)
 {
 	int width, height;
 	std::tie(width, height) = windowSize;
@@ -27,9 +29,17 @@ Window::~Window()
 
 WindowDimensions Window::GetWindowSize() const
 {
-	int width, height;
-	glfwGetWindowSize(m_pWindow, &width, &height);
-	return std::make_tuple((uint32_t)width, (uint32_t)height);
+	return m_windowSize;
+}
+
+uint32_t Window::GetWindowWidth() const
+{
+	return std::get<0>(m_windowSize);
+}
+
+uint32_t Window::GetWindowHeight() const
+{
+	return std::get<1>(m_windowSize);
 }
 
 bool Window::ShouldClose() const noexcept

@@ -10,17 +10,11 @@ struct GfxSwapchain
 		, m_extent(0,0)
 	{}
 
-	std::vector<vk::ImageView> GetImageViews() const {
-		std::vector<vk::ImageView> views;
-		views.reserve(m_imageViews.size());
-
-		for (vk::raii::ImageView const& view : m_imageViews)
-		{
-			views.push_back(*view);
-		}
-
-		return views;
+	vk::ImageView GetImageView(uint32_t index) const {
+		return *m_imageViews.at(index);
 	}
+
+	uint32_t Size() const { return m_imageViews.size(); }
 
 	std::vector<vk::raii::ImageView> m_imageViews;
 	vk::raii::SwapchainKHR m_swapchain;

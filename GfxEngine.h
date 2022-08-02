@@ -7,6 +7,7 @@
 #include "GfxPipeline.h"
 #include "Mesh.h"
 #include "GfxBuffer.h"
+#include "Camera.h"
 
 std::string const k_engineName = "Vulkan?";
 uint32_t const k_engineVersion = 1;
@@ -47,6 +48,8 @@ private:
 	Mesh m_cube;
 	GfxBuffer m_cubeVertexBuffer;
 	GfxBuffer m_cubeIndexBuffer;
+
+	Camera m_camera;
 
 };
 

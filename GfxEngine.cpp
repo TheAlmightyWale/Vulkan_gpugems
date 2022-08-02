@@ -2,7 +2,6 @@
 #include "GfxFrame.h"
 #include "GfxDevice.h"
 #include "GfxImage.h"
-#include "GfxUniformBuffer.h"
 #include "GfxPipeline.h"
 #include "GfxPipelineBuilder.h"
 #include "GfxSwapchain.h"
@@ -61,6 +60,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_graphicsCommandBuffer(nullptr)
 	, m_aquireImageSemaphore(nullptr)
 	, m_readyToPresentSemaphore(nullptr)
+	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
 {
 
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
@@ -87,31 +87,17 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_surface = std::move(vk::raii::SurfaceKHR(m_pInstance->GetInstance(), _surface));
 	m_swapChain = m_pDevice->CreateSwapChain(m_surface);
 
+	vk::Format depthSurfaceFormat = vk::Format::eD16Unorm;
 	auto [width, height] = pWindow->GetWindowSize();
-	m_depthBuffer = m_pDevice->CreateDepthStencil(width, height);
-
-	//TODO view/projection should be held in camera class
-	glm::mat4x4 view = glm::lookAt(glm::vec3{ -5.0f, 3.0f, -10.0f }/*eye*/, glm::vec3{ 0.0f,0.0f,0.0f }/*target*/, glm::vec3{ 0.0f, -1.0f, 0.0f }/*up*/); //TODO double check up direction
-	glm::mat4x4 projection = glm::perspective(glm::radians(45.0f)/*fov*/, 1.0f/*aspect*/, 0.1f/*near*/, 100.0f/*far*/);
-	//Transforms open-gl clip format to vulkan format. vulkan has an inverted Y axis and a clipping z plane from 0 to 1 rather than -1 to 1
-	glm::mat4x4 clipTransform = glm::mat4x4(
-		1.0f, 0.0f, 0.0f, 0.0f,
-		0.0f, -1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 0.5f, 0.0f,
-		0.0f, 0.0f, 0.5f, 1.0f);
-
-	glm::mat4x4 vpc = clipTransform * projection * view;
-	GfxUniformBuffer viewProjectionTransform = m_pDevice->CreateUniformBuffer(
-		reinterpret_cast<uint8_t*>(&vpc),
-		sizeof(vpc),
-		vk::SharingMode::eExclusive);
+	m_depthBuffer = m_pDevice->CreateDepthStencil(width, height, depthSurfaceFormat);
 
 	//Create attachments
 	//Attachments describe what image formats/target formats we want write to / read from
 	vk::Format renderSurfaceFormat = vk::Format::eB8G8R8A8Unorm;
-	vk::Format depthSurfaceFormat = vk::Format::eD16Unorm;
 
-	std::array<vk::AttachmentDescription, 1> renderPassAttachments;
+
+	std::array<vk::AttachmentDescription, 2> renderPassAttachments;
+	// Color output attachment
 	renderPassAttachments[0] = vk::AttachmentDescription(
 		{} /*flags*/,
 		renderSurfaceFormat,
@@ -127,36 +113,39 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		vk::ImageLayout::ePresentSrcKHR //final
 	);
 
-	//renderPassAttachments[1] = vk::AttachmentDescription(
-	//	{} /*flags*/,
-	//	depthSurfaceFormat,
-	//	vk::SampleCountFlagBits::e1,
-	//	vk::AttachmentLoadOp::eClear,
-	//	vk::AttachmentStoreOp::eDontCare,
-	//	vk::AttachmentLoadOp::eDontCare,
-	//	vk::AttachmentStoreOp::eDontCare,
-	//	vk::ImageLayout::eUndefined,
-	//	vk::ImageLayout::eDepthStencilAttachmentOptimal
-	//);
+	//Depth test attachment
+	renderPassAttachments[1] = vk::AttachmentDescription(
+		{},
+		depthSurfaceFormat,
+		vk::SampleCountFlagBits::e1,
+		vk::AttachmentLoadOp::eClear,
+		vk::AttachmentStoreOp::eStore,
+		vk::AttachmentLoadOp::eDontCare,
+		vk::AttachmentStoreOp::eDontCare,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eDepthStencilAttachmentOptimal
+	);
 
 	//Add to renderpass
 	m_renderPass = GfxPipelineBuilder::CreateRenderPass(
 		m_pDevice->GetDevice(),
-		viewProjectionTransform,
 		renderSurfaceFormat,
 		depthSurfaceFormat,
 		renderPassAttachments);
 
 	//Now we have a renderpass defined we need to connect actual image resources to it
-	std::vector<vk::ImageView> views = m_swapChain.GetImageViews();
-	m_frames = std::vector<GfxFrame>(views.size());
+	m_frames = std::vector<GfxFrame>(m_swapChain.Size());
 
-	for (uint32_t i = 0; i < views.size(); ++i)
+	for (uint32_t i = 0; i < m_swapChain.Size(); ++i)
 	{
+		std::array<vk::ImageView, 2> colorNDepth;
+		colorNDepth[0] = m_swapChain.GetImageView(i);
+		colorNDepth[1] = *m_depthBuffer.view;
+
 		vk::FramebufferCreateInfo frameBufferCreateInfo(
 			{},
 			*m_renderPass,
-			views[i],
+			colorNDepth,
 			width,
 			height,
 			1
@@ -188,6 +177,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	builder._scissor.setExtent({ width, height });
 
 	builder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill);
+	builder._depthStencil = GfxPipelineBuilder::CreateDepthStencilStateInfo();
 	builder._multisampling = GfxPipelineBuilder::CreateMultisampleStateInfo();
 	builder._colorBlendAttachment = GfxPipelineBuilder::CreateColorBlendAttachmentState();
 	builder._pipelineLayout = *m_pipeline.layout;
@@ -225,24 +215,27 @@ void GfxEngine::Render()
 	m_graphicsCommandBuffer.begin(beginInfo);
 
 	vk::ClearColorValue const k_clearColor(std::array<float, 4>{48.0f / 2550.f, 10.0f / 255.0f, 36.0f / 255.0f, 1.0f});
-	vk::ClearValue const clearValue{ k_clearColor };
-	vk::Rect2D const renderArea({ 0,0 }, m_swapChain.m_extent);
-	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *m_frames[imageIndex].frameBuffer, renderArea, clearValue);
+	vk::ClearDepthStencilValue const k_depthClear(1.0f, 0); //1.0 is max depth
+	std::array<vk::ClearValue, 2> clearValues = { k_clearColor, k_depthClear };
 
-	//TODO move out
-	glm::vec3 camPos = { 0.0f,0.0f, -2.0f };
-	glm::mat4 view = glm::translate(glm::identity<glm::mat4>(), camPos);
-	float aspectRatio = m_swapChain.m_extent.width / m_swapChain.m_extent.height;
-	glm::mat4 proj = glm::perspective(glm::radians(70.0f), aspectRatio, 0.1f, 100.0f);
+	vk::Rect2D const renderArea({ 0,0 }, m_swapChain.m_extent);
+	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *m_frames[imageIndex].frameBuffer, renderArea, clearValues);
+
 	//Rotate cube
 	glm::mat4 model = glm::rotate(glm::identity<glm::mat4>(), glm::radians(frameNum * 0.4f), glm::vec3(0.5f,0.5f, 0.0f));
-	glm::mat4 mvp = proj * view * model;
+	glm::mat4 mvp = m_camera.GetViewProj() * model;
 
 	m_graphicsCommandBuffer.beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
 	m_graphicsCommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
 	vk::DeviceSize dummyOffset(0);
 	m_graphicsCommandBuffer.bindVertexBuffers(0/*first binding*/, *m_cubeVertexBuffer.m_buffer, dummyOffset);
 	m_graphicsCommandBuffer.bindIndexBuffer(*m_cubeIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint16);
+
+	glm::mat4 model2 = glm::translate(glm::identity<glm::mat4>(), glm::vec3(-0.5, -0.5f, -0.5f));
+	glm::mat4 mvp2 = m_camera.GetViewProj() * model2;
+	m_graphicsCommandBuffer.pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp2);
+	m_graphicsCommandBuffer.drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
+
 	m_graphicsCommandBuffer.pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
 	m_graphicsCommandBuffer.drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
 	
