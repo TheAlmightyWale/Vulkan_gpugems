@@ -153,7 +153,7 @@ GfxDevice::~GfxDevice()
 
 vk::Queue GfxDevice::GetGraphicsQueue() { return *m_pDevice->getQueue(m_graphcsQueueFamilyIndex, 0); }
 
-GfxSwapchain GfxDevice::CreateSwapChain(vk::raii::SurfaceKHR const& surface)
+GfxSwapchain GfxDevice::CreateSwapChain(vk::raii::SurfaceKHR const& surface, uint32_t desiredSwapchainSize)
 {
 	//TODO handle separate graphics and present queues
 	uint32_t graphicsQueueFamilyIndex = GetGraphicsQueueFamilyIndex(m_physcialDevice.getQueueFamilyProperties());
@@ -174,6 +174,15 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::raii::SurfaceKHR const& surface)
 		throw InitializationException("Failed to create swapChain, surface did not provide valid extents");
 	}
 
+	if (surfaceCapabilities.minImageCount > desiredSwapchainSize || surfaceCapabilities.maxImageCount < desiredSwapchainSize)
+	{
+		throw InitializationException(
+			std::format("Surface capabilities do not match desired swapchin size. min {0} max {1} desired {2}",
+				surfaceCapabilities.minImageCount,
+				surfaceCapabilities.maxImageCount,
+				desiredSwapchainSize));
+	}
+
 	vk::Extent2D swapChainExtent = surfaceCapabilities.currentExtent;
 	vk::PresentModeKHR swapChainPresentMode = vk::PresentModeKHR::eFifo;
 
@@ -187,7 +196,7 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::raii::SurfaceKHR const& surface)
 	vk::SwapchainCreateInfoKHR createInfo(
 		{}/*flags*/,
 		*surface,
-		surfaceCapabilities.minImageCount,
+		desiredSwapchainSize,
 		format,
 		vk::ColorSpaceKHR::eSrgbNonlinear, //TODO attributes of different color spaces?
 		swapChainExtent,
@@ -291,6 +300,13 @@ vk::raii::Semaphore GfxDevice::CreateVkSemaphore()
 	vk::raii::Semaphore semaphore(*m_pDevice.get(), createInfo);
 
 	return std::move(semaphore);
+}
+
+vk::raii::Fence GfxDevice::CreateFence()
+{
+	vk::FenceCreateInfo createInfo(vk::FenceCreateFlagBits::eSignaled);
+	vk::raii::Fence fence(*m_pDevice, createInfo);
+	return std::move(fence);
 }
 
 GfxBuffer GfxDevice::CreateBuffer(size_t size, vk::BufferUsageFlags flags)

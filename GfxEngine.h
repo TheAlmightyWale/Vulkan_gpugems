@@ -12,6 +12,7 @@
 std::string const k_engineName = "Vulkan?";
 uint32_t const k_engineVersion = 1;
 uint32_t const k_vulkanVersion = VK_API_VERSION_1_2;
+uint32_t const k_numFramesBuffered = 2; //Double buffering
 
 class GfxEngine
 {
@@ -21,7 +22,11 @@ public:
 
 	void Render();
 
+protected:
+	GfxFrame& GetCurrentFrame();
+
 private:
+
 	vk::raii::ShaderModule LoadShaderModule(std::string const& filePath);
 
 	std::shared_ptr<GfxDevice> m_pDevice;
@@ -37,19 +42,13 @@ private:
 
 	vk::raii::Queue m_graphicsQueue;
 
-	//TODO should these be their own objects?
-	vk::raii::CommandPool m_graphicsCommandPool;
-	vk::raii::CommandBuffer m_graphicsCommandBuffer;
-
-	//Rendering semaphores
-	vk::raii::Semaphore m_aquireImageSemaphore;
-	vk::raii::Semaphore m_readyToPresentSemaphore;
-
 	Mesh m_cube;
 	GfxBuffer m_cubeVertexBuffer;
 	GfxBuffer m_cubeIndexBuffer;
 
 	Camera m_camera;
+
+	uint64_t m_numFramesRendered;
 
 };
 
