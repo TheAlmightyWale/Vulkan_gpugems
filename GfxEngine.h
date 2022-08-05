@@ -13,6 +13,7 @@ std::string const k_engineName = "Vulkan?";
 uint32_t const k_engineVersion = 1;
 uint32_t const k_vulkanVersion = VK_API_VERSION_1_2;
 uint32_t const k_numFramesBuffered = 2; //Double buffering
+uint32_t const k_queryPoolCount = 64;
 
 class GfxEngine
 {
@@ -49,6 +50,11 @@ private:
 	Camera m_camera;
 
 	uint64_t m_numFramesRendered;
+
+	WindowPtr_t m_pWindow;
+
+	//Perf timers
+	vk::raii::QueryPool m_timingQueryPool;
 
 };
 

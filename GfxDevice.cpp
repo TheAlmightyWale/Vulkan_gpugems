@@ -342,6 +342,13 @@ GfxBuffer GfxDevice::CreateBuffer(size_t size, vk::BufferUsageFlags flags)
 	return std::move(result);
 }
 
+vk::raii::QueryPool GfxDevice::CreateQueryPool(uint32_t queryCount)
+{
+	vk::QueryPoolCreateInfo createInfo({}, vk::QueryType::eTimestamp, queryCount);
+	vk::raii::QueryPool pool(*m_pDevice, createInfo);
+	return std::move(pool);
+}
+
 vk::raii::CommandPool GfxDevice::CreateGraphicsCommandPool()
 {
 	uint32_t queueFamilyIndex = GetGraphicsQueueFamilyIndex(m_physcialDevice.getQueueFamilyProperties());

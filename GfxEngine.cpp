@@ -20,7 +20,7 @@ Mesh LoadCube()
 	Mesh cube;
 	for (uint32_t i = 0; i < k_cubeVertexValuesCount; i+= 3)
 	{
-		Vertex v;
+		Vertex v{};
 		v.vx = k_cubeVertices[i + 0];
 		v.vy = k_cubeVertices[i + 1];
 		v.vz = k_cubeVertices[i + 2];
@@ -57,6 +57,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_graphicsQueue(nullptr)
 	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
 	, m_numFramesRendered(0)
+	, m_timingQueryPool(nullptr)
+	, m_pWindow(pWindow)
 {
 
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
@@ -86,7 +88,6 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	//Create attachments
 	//Attachments describe what image formats/target formats we want write to / read from
 	vk::Format renderSurfaceFormat = vk::Format::eB8G8R8A8Unorm;
-
 
 	std::array<vk::AttachmentDescription, 2> renderPassAttachments;
 	// Color output attachment
@@ -190,6 +191,10 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	memcpy(m_cubeVertexBuffer.m_pData, cube.vertices.data(), m_cubeVertexBuffer.m_dataSize);
 	memcpy(m_cubeIndexBuffer.m_pData, cube.indices.data(), m_cubeIndexBuffer.m_dataSize);
+
+	//TODO move out
+	m_timingQueryPool = m_pDevice->CreateQueryPool(k_queryPoolCount);
+
 }
 
 GfxEngine::~GfxEngine()
@@ -198,16 +203,33 @@ GfxEngine::~GfxEngine()
 
 void GfxEngine::Render()
 {
+	double frameCpuBeginTime = glfwGetTime() * 1000;
+
 	uint64_t const k_aquireTimeout_ns = 100000000; //0.1 seconds
 	uint64_t const k_renderCompleteTimeout_ns = 1000000000; //1 second
 	GfxFrame& frame = GetCurrentFrame();
-	m_pDevice->GetDevice().waitForFences(*frame.renderCompleteFence, VK_TRUE /*waitall*/, k_renderCompleteTimeout_ns);
+	m_pDevice->GetDevice().waitForFences(*frame.renderCompleteFence, VK_TRUE /*wait all*/, k_renderCompleteTimeout_ns);
 	m_pDevice->GetDevice().resetFences(*frame.renderCompleteFence);
+
+	//Grab previous frame perf results
+	auto [queryResult, resultData] = m_timingQueryPool.getResults<double>(
+		0/*first query*/,
+		2 /*queryCount*/,
+		sizeof(uint64_t) * 2/*assuming 64 bit per result we want*/,
+		sizeof(uint64_t),
+		vk::QueryResultFlagBits::e64);
+
+	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod * 1e-6;
+	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod * 1e-6;
+
 	auto [result, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
 
 	frame.commandPool.reset();
 	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	frame.commandBuffer.begin(beginInfo);
+
+	frame.commandBuffer.resetQueryPool(*m_timingQueryPool, 0, k_queryPoolCount);
+	frame.commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 0);
 
 	vk::ClearColorValue const k_clearColor(std::array<float, 4>{48.0f / 2550.f, 10.0f / 255.0f, 36.0f / 255.0f, 1.0f});
 	vk::ClearDepthStencilValue const k_depthClear(1.0f, 0); //1.0 is max depth
@@ -235,6 +257,7 @@ void GfxEngine::Render()
 	
 	frame.commandBuffer.endRenderPass();
 
+	frame.commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 1);
 	frame.commandBuffer.end();
 
 	vk::PipelineStageFlags const submitStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
@@ -245,6 +268,11 @@ void GfxEngine::Render()
 
 	vk::PresentInfoKHR presentInfo(*frame.readyToPresentSemaphore, *m_swapChain.m_swapchain, imageIndex);
 	queue.presentKHR(presentInfo);//TODO handle different Success results
+
+	//Perf updates
+	double frameCpuEndTime = glfwGetTime() * 1000;
+
+	m_pWindow->SetTitle(std::format("cpu: {0:.3f}ms gpu: {1:.3f}ms", frameCpuEndTime - frameCpuBeginTime, frameGpuEndTime - frameGpuBeginTime));
 
 	m_numFramesRendered++;
 }

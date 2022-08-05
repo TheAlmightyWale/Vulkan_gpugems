@@ -46,3 +46,8 @@ bool Window::ShouldClose() const noexcept
 {
 	return glfwWindowShouldClose(m_pWindow);
 }
+
+void Window::SetTitle(std::string const& windowTitle)
+{
+	glfwSetWindowTitle(m_pWindow, windowTitle.c_str());
+}

@@ -18,9 +18,12 @@ public:
 	vk::raii::Semaphore CreateVkSemaphore();
 	vk::raii::Fence CreateFence();
 	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlags flags);
+	vk::raii::QueryPool CreateQueryPool(uint32_t queryCount);
 	
 	vk::Queue GetGraphicsQueue();
 	vk::raii::Device const& GetDevice() const noexcept { return *m_pDevice.get(); }
+
+	vk::PhysicalDeviceProperties GetProperties() const { return m_physcialDevice.getProperties(); }
 
 private:
 	vk::raii::PhysicalDevice m_physcialDevice;

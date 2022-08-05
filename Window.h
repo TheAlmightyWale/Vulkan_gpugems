@@ -21,6 +21,8 @@ public:
 	uint32_t GetWindowHeight() const;
 	bool ShouldClose() const noexcept;
 
+	void SetTitle(std::string const& windowTitle);
+
 	GLFWwindow* Get() const noexcept { return m_pWindow; }
 
 private:
