@@ -12,8 +12,8 @@ public:
 	~GfxDevice();
 
 	vk::raii::CommandPool CreateGraphicsCommandPool();
-	vk::raii::CommandBuffers CreateCommandBuffers(vk::raii::CommandPool const& commandPool, uint32_t numBuffers);
-	GfxSwapchain CreateSwapChain(vk::raii::SurfaceKHR const& surface, uint32_t desiredSwapchainSize);
+	vk::raii::CommandBuffers CreateCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers);
+	GfxSwapchain CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t desiredSwapchainSize);
 	GfxImage CreateDepthStencil(uint32_t width, uint32_t height, vk::Format depthFormat);
 	vk::raii::Semaphore CreateVkSemaphore();
 	vk::raii::Fence CreateFence();

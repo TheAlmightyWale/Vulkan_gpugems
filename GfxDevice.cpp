@@ -153,20 +153,20 @@ GfxDevice::~GfxDevice()
 
 vk::Queue GfxDevice::GetGraphicsQueue() { return *m_pDevice->getQueue(m_graphcsQueueFamilyIndex, 0); }
 
-GfxSwapchain GfxDevice::CreateSwapChain(vk::raii::SurfaceKHR const& surface, uint32_t desiredSwapchainSize)
+GfxSwapchain GfxDevice::CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t desiredSwapchainSize)
 {
 	//TODO handle separate graphics and present queues
 	uint32_t graphicsQueueFamilyIndex = GetGraphicsQueueFamilyIndex(m_physcialDevice.getQueueFamilyProperties());
-	if (!m_physcialDevice.getSurfaceSupportKHR(graphicsQueueFamilyIndex, *surface))
+	if (!m_physcialDevice.getSurfaceSupportKHR(graphicsQueueFamilyIndex, surface))
 	{
 		throw InitializationException("Failed to create swapChain, graphics queue family does not support presentation");
 	}
 
 	//TODO handle image format choosing
-	std::vector<vk::SurfaceFormatKHR> formats = m_physcialDevice.getSurfaceFormatsKHR(*surface);
+	std::vector<vk::SurfaceFormatKHR> formats = m_physcialDevice.getSurfaceFormatsKHR(surface);
 	vk::Format format = formats.at(0).format;
 
-	vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_physcialDevice.getSurfaceCapabilitiesKHR(*surface);
+	vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_physcialDevice.getSurfaceCapabilitiesKHR(surface);
 
 	//TODO handle surface not providing extents and us providing a default to fall back to
 	if (surfaceCapabilities.currentExtent.width == std::numeric_limits<uint32_t>::max() || surfaceCapabilities.currentExtent.height == std::numeric_limits<uint32_t>::max())
@@ -195,7 +195,7 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::raii::SurfaceKHR const& surface, uin
 
 	vk::SwapchainCreateInfoKHR createInfo(
 		{}/*flags*/,
-		*surface,
+		surface,
 		desiredSwapchainSize,
 		format,
 		vk::ColorSpaceKHR::eSrgbNonlinear, //TODO attributes of different color spaces?
@@ -356,8 +356,8 @@ vk::raii::CommandPool GfxDevice::CreateGraphicsCommandPool()
 	return std::move(vk::raii::CommandPool(*m_pDevice.get(), createInfo));
 }
 
-vk::raii::CommandBuffers GfxDevice::CreateCommandBuffers(vk::raii::CommandPool const& commandPool, uint32_t numBuffers)
+vk::raii::CommandBuffers GfxDevice::CreateCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers)
 {
-	vk::CommandBufferAllocateInfo allocateInfo(*commandPool, vk::CommandBufferLevel::ePrimary, 1/*Command buffer count*/);
+	vk::CommandBufferAllocateInfo allocateInfo(commandPool, vk::CommandBufferLevel::ePrimary, numBuffers);
 	return std::move(vk::raii::CommandBuffers(*m_pDevice.get(), allocateInfo));
 }

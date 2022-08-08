@@ -79,7 +79,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	VkSurfaceKHR _surface;
 	glfwCreateWindowSurface(*m_pInstance->GetInstance(), pWindow->Get(), nullptr, &_surface);
 	m_surface = std::move(vk::raii::SurfaceKHR(m_pInstance->GetInstance(), _surface));
-	m_swapChain = m_pDevice->CreateSwapChain(m_surface, k_numFramesBuffered);
+	m_swapChain = m_pDevice->CreateSwapChain(*m_surface, k_numFramesBuffered);
 
 	vk::Format depthSurfaceFormat = vk::Format::eD16Unorm;
 	auto [width, height] = pWindow->GetWindowSize();
@@ -148,7 +148,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		m_frames[i].aquireImageSemaphore = m_pDevice->CreateVkSemaphore();
 		m_frames[i].readyToPresentSemaphore = m_pDevice->CreateVkSemaphore();
 		m_frames[i].commandPool = m_pDevice->CreateGraphicsCommandPool();
-		m_frames[i].commandBuffer = std::move(m_pDevice->CreateCommandBuffers(m_frames[i].commandPool, 1/*num buffers*/).front());
+		m_frames[i].commandBuffer = std::move(m_pDevice->CreateCommandBuffers(*m_frames[i].commandPool, 1/*num buffers*/).front());
 		m_frames[i].renderCompleteFence = m_pDevice->CreateFence();
 	}
 
