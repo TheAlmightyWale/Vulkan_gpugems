@@ -199,6 +199,7 @@
     <ClCompile Include="GfxDevice.cpp" />
     <ClCompile Include="GfxEngine.cpp" />
     <ClCompile Include="GfxPipelineBuilder.cpp" />
+    <ClCompile Include="GfxTextOverlay.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Window.cpp" />
   </ItemGroup>
@@ -217,6 +218,7 @@
     <ClInclude Include="GfxPipeline.h" />
     <ClInclude Include="GfxPipelineBuilder.h" />
     <ClInclude Include="GfxSwapChain.h" />
+    <ClInclude Include="GfxTextOverlay.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Math.h" />
     <ClInclude Include="Mesh.h" />
@@ -227,6 +229,14 @@
       <FileType>Document</FileType>
     </CustomBuild>
     <CustomBuild Include="triangle.vert">
+      <FileType>Document</FileType>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="text.frag">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="text.vert">
       <FileType>Document</FileType>
     </CustomBuild>
   </ItemGroup>

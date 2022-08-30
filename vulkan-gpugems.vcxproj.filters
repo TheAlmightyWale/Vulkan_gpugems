@@ -45,6 +45,9 @@
     <ClCompile Include="Camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="GfxTextOverlay.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math.h">
@@ -101,12 +104,21 @@
     <ClInclude Include="Camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GfxTextOverlay.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="triangle.vert">
       <Filter>Resource Files\Shaders</Filter>
     </CustomBuild>
     <CustomBuild Include="triangle.frag">
+      <Filter>Resource Files\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="text.frag">
+      <Filter>Resource Files\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="text.vert">
       <Filter>Resource Files\Shaders</Filter>
     </CustomBuild>
   </ItemGroup>

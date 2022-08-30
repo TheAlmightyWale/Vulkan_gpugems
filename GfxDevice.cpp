@@ -245,8 +245,8 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t 
 
 GfxImage GfxDevice::CreateDepthStencil(uint32_t width, uint32_t height, vk::Format depthFormat)
 {
-	vk::ImageAspectFlags aspect = vk::ImageAspectFlagBits::eDepth;
-	vk::ImageCreateInfo depthStencilCreateInfo{
+	vk::ImageAspectFlags const aspect = vk::ImageAspectFlagBits::eDepth;
+	vk::ImageCreateInfo const depthStencilCreateInfo{
 		{} /*flags*/,
 		vk::ImageType::e2D,
 		depthFormat,
@@ -258,40 +258,44 @@ GfxImage GfxDevice::CreateDepthStencil(uint32_t width, uint32_t height, vk::Form
 		vk::ImageUsageFlagBits::eDepthStencilAttachment
 	};
 
-	vk::raii::Image depthImage(*m_pDevice.get(), depthStencilCreateInfo);
+	SPDLOG_DEBUG("Creating Depth Buffer");
+
+	return CreateImage(depthStencilCreateInfo, aspect);
+}
+
+GfxImage GfxDevice::CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect)
+{
+	GfxImage image;
+	image.image = vk::raii::Image(*m_pDevice.get(), createInfo);
 
 	vk::PhysicalDeviceMemoryProperties memoryProperties = m_physcialDevice.getMemoryProperties();
-	vk::MemoryRequirements memoryRequirements = depthImage.getMemoryRequirements();
+	vk::MemoryRequirements memoryRequirements = image.image.getMemoryRequirements();
 
 	uint32_t typeIndex = FindMemoryType(memoryProperties, memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
 	vk::MemoryAllocateInfo memoryAllocateInfo(memoryRequirements.size, typeIndex);
-	vk::raii::DeviceMemory depthMemory(*m_pDevice.get(), memoryAllocateInfo);
-	depthImage.bindMemory(*depthMemory, 0 /*memory offset*/);
+	image.memory = vk::raii::DeviceMemory(*m_pDevice.get(), memoryAllocateInfo);
+	image.image.bindMemory(*image.memory, 0 /*memory offset*/);
 
-	vk::ImageViewCreateInfo depthViewCreateInfo(
+	vk::ImageViewCreateInfo imageViewCreateInfo(
 		{}/*flags*/,
-		*depthImage,
+		* image.image,
 		vk::ImageViewType::e2D,
-		depthFormat,
+		createInfo.format,
 		{} /*components*/,
 		vk::ImageSubresourceRange{
-			vk::ImageAspectFlagBits::eDepth,
+			aspect,
 			0 /*base mip level*/,
 			1 /*level count*/,
 			0 /*base array layer*/,
 			1 /*layer count*/
 		}
 	);
-	vk::raii::ImageView depthView(*m_pDevice.get(), depthViewCreateInfo);
+	image.view = vk::raii::ImageView(*m_pDevice.get(), imageViewCreateInfo);
 
-	SPDLOG_INFO("Created depth buffer with dimensions x:{0}, y:{1}", width, height);
+	SPDLOG_DEBUG("Created image resource with dimensions x:{0}, y:{1}", createInfo.extent.width, createInfo.extent.height);
 
-	GfxImage depthStencil;
-	depthStencil.image = std::move(depthImage);
-	depthStencil.view = std::move(depthView);
-	depthStencil.memory = std::move(depthMemory);
-	return depthStencil;
+	return image;
 }
 
 vk::raii::Semaphore GfxDevice::CreateVkSemaphore()
@@ -347,6 +351,29 @@ vk::raii::QueryPool GfxDevice::CreateQueryPool(uint32_t queryCount)
 	vk::QueryPoolCreateInfo createInfo({}, vk::QueryType::eTimestamp, queryCount);
 	vk::raii::QueryPool pool(*m_pDevice, createInfo);
 	return std::move(pool);
+}
+
+vk::raii::Sampler GfxDevice::CreateTextureSampler()
+{
+	vk::SamplerCreateInfo createInfo(
+		{},
+		vk::Filter::eLinear /*mag filter*/,
+		vk::Filter::eLinear /*min filter*/,
+		vk::SamplerMipmapMode::eLinear /*mipmap mode*/,
+		/* U,V,W respectively*/
+		vk::SamplerAddressMode::eRepeat,
+		vk::SamplerAddressMode::eRepeat,
+		vk::SamplerAddressMode::eRepeat,
+		0.0f /*mip LOD bias*/,
+		VK_FALSE /*anisotropy enable*/,
+		0.0f /* max anisotropy*/,
+		VK_FALSE /* compare enable*/,
+		vk::CompareOp::eNever,
+		0.0f /*min LOD*/,
+		1.0f /*max LOD*/,
+		vk::BorderColor::eFloatOpaqueWhite
+	);
+	return std::move(vk::raii::Sampler(*m_pDevice, createInfo));
 }
 
 vk::raii::CommandPool GfxDevice::CreateGraphicsCommandPool()

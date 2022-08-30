@@ -16,7 +16,6 @@ public:
 
 private:
 	WindowPtr_t m_pWindow;
-	bool m_bShouldQuit;
 	std::string const m_appName;
 	std::shared_ptr<GfxEngine> m_pGfxEngine;
 };

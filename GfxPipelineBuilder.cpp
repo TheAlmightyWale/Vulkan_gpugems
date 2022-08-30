@@ -10,19 +10,12 @@ vk::raii::Pipeline GfxPipelineBuilder::BuildPipeline(vk::raii::Device const& dev
         vk::LogicOp::eCopy, //Logic op
         _colorBlendAttachment);
 
-    vk::VertexInputBindingDescription description(0, sizeof(Vertex)); //Vertex should be 4 * 6 = 24bytes
-    std::array<vk::VertexInputAttributeDescription, 2> attributes =
-    {
-        vk::VertexInputAttributeDescription(0 /*location*/, 0 /*binding*/, vk::Format::eR32G32B32Sfloat, 0/*offset*/),
-        vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, 12 /*3 floats from position*/)
-    };
-    vk::PipelineVertexInputStateCreateInfo createInfo({}, description, attributes);
-    _vertexInputInfo = createInfo;
+    vk::PipelineVertexInputStateCreateInfo vertexInput({}, _vertexDescription.bindings, _vertexDescription.attributes);
 
     vk::GraphicsPipelineCreateInfo pipelineInfo(
         {},
         _shaderStages,
-        &_vertexInputInfo,
+        &vertexInput,
         &_inputAssembly,
         nullptr /*tesslation state*/,
         &viewportStateCreateInfo,
@@ -59,20 +52,6 @@ vk::PipelineShaderStageCreateInfo GfxPipelineBuilder::CreateShaderStageInfo(vk::
     return createInfo;
 }
 
-//TODO move to shader based vertex attributes?
-vk::PipelineVertexInputStateCreateInfo GfxPipelineBuilder::CreateVertexInputStateInfo()
-{
-    vk::VertexInputBindingDescription description(0, sizeof(Vertex)); //Vertex should be 4 * 6 = 24bytes
-    std::array<vk::VertexInputAttributeDescription, 2> attributes =
-    {
-        vk::VertexInputAttributeDescription(0 /*location*/, 0 /*binding*/, vk::Format::eR32G32B32Sfloat, 0/*offset*/),
-        vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, 12 /*3 floats from position*/)
-    };
-    vk::PipelineVertexInputStateCreateInfo createInfo({}, description, attributes);
-
-    return createInfo;
-}
-
 vk::PipelineInputAssemblyStateCreateInfo GfxPipelineBuilder::CreateInputAssemblyInfo(vk::PrimitiveTopology topology)
 {
     vk::PipelineInputAssemblyStateCreateInfo createInfo({}, topology, VK_FALSE);
@@ -80,14 +59,14 @@ vk::PipelineInputAssemblyStateCreateInfo GfxPipelineBuilder::CreateInputAssembly
     return createInfo;
 }
 
-vk::PipelineRasterizationStateCreateInfo GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode polygonMode)
+vk::PipelineRasterizationStateCreateInfo GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode polygonMode, vk::CullModeFlagBits cullMode)
 {
     vk::PipelineRasterizationStateCreateInfo createInfo(
         {},
         VK_FALSE, //Depth Clamp enable
         VK_FALSE, //Rasterizer discard enabled
         polygonMode,
-        vk::CullModeFlagBits::eBack,
+        cullMode,
         vk::FrontFace::eClockwise,
         VK_FALSE, //Depth bias enable
         0.0f, //DepthBias constant
@@ -125,19 +104,22 @@ vk::PipelineColorBlendAttachmentState GfxPipelineBuilder::CreateColorBlendAttach
     return createInfo;
 }
 
-vk::raii::PipelineLayout GfxPipelineBuilder::CreatePipelineLayout(vk::raii::Device const& device, vk::PushConstantRange pushConstant)
+vk::raii::PipelineLayout GfxPipelineBuilder::CreatePipelineLayout(
+    vk::raii::Device const& device,
+    vk::ArrayProxyNoTemporaries<vk::PushConstantRange> pushConstants,
+    vk::ArrayProxyNoTemporaries<vk::DescriptorSetLayout> descriptorSets)
 {
-    vk::PipelineLayoutCreateInfo createInfo({}/*flags*/, {}/*descriptor sets*/, pushConstant);
+    vk::PipelineLayoutCreateInfo createInfo({}/*flags*/, descriptorSets, pushConstants);
     vk::raii::PipelineLayout layout(device, createInfo);
 
     return std::move(layout);
 }
 
+//TODO assumes you have 2 attachments first is color second is depth stencil
 vk::raii::RenderPass GfxPipelineBuilder::CreateRenderPass(
     vk::raii::Device const& device,
-    vk::Format renderSurfaceFormat,
-    vk::Format depthSurfaceFormat,
-    vk::ArrayProxyNoTemporaries<vk::AttachmentDescription const> const& attachments
+    vk::ArrayProxyNoTemporaries<vk::AttachmentDescription const> const& attachments,
+    vk::ArrayProxyNoTemporaries<vk::SubpassDependency const> const& dependencies
 )
 {
     //TODO bundle attachment description and references together rather than hardcode here
@@ -145,41 +127,17 @@ vk::raii::RenderPass GfxPipelineBuilder::CreateRenderPass(
     vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
     vk::SubpassDescription subpass({} /*flags*/, vk::PipelineBindPoint::eGraphics, {}/*input attachments*/, colorReference, {}/*resolve attachments*/, &depthReference);
 
-    vk::SubpassDependency colorAttachmentDependency(
-        VK_SUBPASS_EXTERNAL,
-        0 /*dst subpass*/,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput/*srcStage*/,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput/*dstStage*/,
-        vk::AccessFlagBits::eNone /*src access mask*/,
-        vk::AccessFlagBits::eColorAttachmentWrite,
-        {} /*dependency flags*/
-    );
-
-    vk::SubpassDependency depthDependency(
-        VK_SUBPASS_EXTERNAL,
-        0,
-        vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
-        vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
-        vk::AccessFlagBits::eNone,
-        vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-        {}
-    );
-
-    std::array<vk::SubpassDependency, 2> dependencies;
-    dependencies[0] = colorAttachmentDependency;
-    dependencies[1] = depthDependency;
-
     vk::RenderPassCreateInfo renderPassCreateInfo({}, attachments, subpass, dependencies);
     return std::move(vk::raii::RenderPass(device, renderPassCreateInfo));
 }
 
-vk::PipelineDepthStencilStateCreateInfo GfxPipelineBuilder::CreateDepthStencilStateInfo()
+vk::PipelineDepthStencilStateCreateInfo GfxPipelineBuilder::CreateDepthStencilStateInfo(vk::Bool32 enableTest, vk::Bool32 enableWrite, vk::CompareOp compareOp)
 {
     vk::PipelineDepthStencilStateCreateInfo createInfo(
         {},
-        VK_TRUE /*enable test*/,
-        VK_TRUE /*enable writes to depth buffer*/,
-        vk::CompareOp::eLess /*comparision of fragment to already written value*/,
+        enableTest /*enable test*/,
+        enableWrite /*enable writes to depth buffer*/,
+        compareOp /*comparision of fragment to already written value*/,
         VK_FALSE /*bounds test*/,
         VK_FALSE /*stencil test*/,
         vk::StencilOp::eZero /*unused stencil ops*/,

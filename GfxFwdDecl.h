@@ -20,3 +20,9 @@ struct GfxSwapchain;
 class GfxEngine;
 struct GfxFrame;
 struct GfxBuffer;
+
+struct VertexDescription
+{
+	std::vector<vk::VertexInputAttributeDescription> attributes;
+	std::vector<vk::VertexInputBindingDescription> bindings;
+};

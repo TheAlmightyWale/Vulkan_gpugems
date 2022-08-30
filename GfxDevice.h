@@ -18,7 +18,9 @@ public:
 	vk::raii::Semaphore CreateVkSemaphore();
 	vk::raii::Fence CreateFence();
 	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlags flags);
+	GfxImage CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect);
 	vk::raii::QueryPool CreateQueryPool(uint32_t queryCount);
+	vk::raii::Sampler CreateTextureSampler();
 	
 	vk::Queue GetGraphicsQueue();
 	vk::raii::Device const& GetDevice() const noexcept { return *m_pDevice.get(); }

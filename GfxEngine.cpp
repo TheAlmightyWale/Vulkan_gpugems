@@ -51,14 +51,23 @@ std::vector<const char*> const k_deviceLayers{
 
 GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow)
 	: m_pInstance(nullptr)
+	, m_pWindow(pWindow)
 	, m_pDevice(nullptr)
-	, m_renderPass(nullptr)
 	, m_surface(nullptr)
+	, m_swapChain()
+	, m_renderPass(nullptr)
+	, m_frames()
+	, m_depthBuffer()
+	, m_pipeline()
 	, m_graphicsQueue(nullptr)
+	, m_textOverlay()
+	, m_cube()
+	, m_cubeVertexBuffer()
+	, m_cubeIndexBuffer()
 	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
 	, m_numFramesRendered(0)
 	, m_timingQueryPool(nullptr)
-	, m_pWindow(pWindow)
+	, m_samplers()
 {
 
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
@@ -68,6 +77,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	//desiredFeatures.geometryShader = VK_TRUE;
 	vk::PhysicalDeviceProperties desiredProperties;
 	//desiredProperties.deviceType = vk::PhysicalDeviceType::eDiscreteGpu;
+	desiredProperties.deviceType = vk::PhysicalDeviceType::eIntegratedGpu;
 	desiredProperties.apiVersion = k_vulkanVersion;
 
 	m_pDevice = std::make_shared<GfxDevice>(m_pInstance->GetInstance(), desiredFeatures, desiredProperties, k_deviceExtensions, k_deviceLayers);
@@ -102,7 +112,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		vk::AttachmentLoadOp::eDontCare,
 		vk::AttachmentStoreOp::eDontCare,
 		/*layout transition*/
-		vk::ImageLayout::eUndefined, //initial
+		vk::ImageLayout::ePresentSrcKHR, //initial
 		vk::ImageLayout::ePresentSrcKHR //final
 	);
 
@@ -119,12 +129,57 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		vk::ImageLayout::eDepthStencilAttachmentOptimal
 	);
 
+	//std::vector<vk::SubpassDependency> renderPassDependencies = {
+	//	//colorAttachmentDependency
+	//	vk::SubpassDependency(
+	//		VK_SUBPASS_EXTERNAL,
+	//		0 /*dst subpass*/,
+	//		vk::PipelineStageFlagBits::eBottomOfPipe/*srcStage*/,
+	//		vk::PipelineStageFlagBits::eColorAttachmentOutput/*dstStage*/,
+	//		vk::AccessFlagBits::eNone /*src access mask*/,
+	//		vk::AccessFlagBits::eColorAttachmentWrite,
+	//		{} /*dependency flags*/
+	//	),
+	//	//depthDependency
+	//	vk::SubpassDependency(
+	//		VK_SUBPASS_EXTERNAL,
+	//		0,
+	//		vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
+	//		vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
+	//		vk::AccessFlagBits::eNone,
+	//		vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+	//		{}
+	//	)
+	//};
+
+	std::array<vk::SubpassDependency, 2> renderPassDependencies = {
+		//Transition swapchain image from final to initial
+		vk::SubpassDependency(
+			VK_SUBPASS_EXTERNAL,
+			0,
+			vk::PipelineStageFlagBits::eBottomOfPipe,
+			vk::PipelineStageFlagBits::eColorAttachmentOutput,
+			vk::AccessFlagBits::eMemoryRead,
+			vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite,
+			vk::DependencyFlagBits::eByRegion
+		),
+		//Transition swapchain image from initial to final
+		vk::SubpassDependency(
+			0,
+			VK_SUBPASS_EXTERNAL,
+			vk::PipelineStageFlagBits::eColorAttachmentOutput,
+			vk::PipelineStageFlagBits::eBottomOfPipe,
+			vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite,
+			vk::AccessFlagBits::eMemoryRead,
+			vk::DependencyFlagBits::eByRegion
+		)
+	};
+
 	//Add to renderpass
 	m_renderPass = GfxPipelineBuilder::CreateRenderPass(
 		m_pDevice->GetDevice(),
-		renderSurfaceFormat,
-		depthSurfaceFormat,
-		renderPassAttachments);
+		renderPassAttachments,
+		renderPassDependencies);
 
 	//Now we have a renderpass defined we need to connect actual image resources to it
 	m_frames = std::vector<GfxFrame>(m_swapChain.Size());
@@ -148,12 +203,12 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		m_frames[i].aquireImageSemaphore = m_pDevice->CreateVkSemaphore();
 		m_frames[i].readyToPresentSemaphore = m_pDevice->CreateVkSemaphore();
 		m_frames[i].commandPool = m_pDevice->CreateGraphicsCommandPool();
-		m_frames[i].commandBuffer = std::move(m_pDevice->CreateCommandBuffers(*m_frames[i].commandPool, 1/*num buffers*/).front());
+		m_frames[i].commandBuffers = std::move(m_pDevice->CreateCommandBuffers(*m_frames[i].commandPool, 2/*num buffers*/));
 		m_frames[i].renderCompleteFence = m_pDevice->CreateFence();
 	}
 
 	vk::PushConstantRange mvpMatrixPush(vk::ShaderStageFlagBits::eVertex, 0/*offset*/, sizeof(glm::mat4x4));
-	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), mvpMatrixPush);
+	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), mvpMatrixPush, nullptr);
 
 	GfxPipelineBuilder builder;
 	builder._shaderStages.push_back(
@@ -174,12 +229,12 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	builder._scissor.setOffset({ 0, 0 }); 
 	builder._scissor.setExtent({ width, height });
 
-	builder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill);
-	builder._depthStencil = GfxPipelineBuilder::CreateDepthStencilStateInfo();
+	builder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack);
+	builder._depthStencil = GfxPipelineBuilder::CreateDepthStencilStateInfo(VK_TRUE, VK_TRUE, vk::CompareOp::eLess);
 	builder._multisampling = GfxPipelineBuilder::CreateMultisampleStateInfo();
 	builder._colorBlendAttachment = GfxPipelineBuilder::CreateColorBlendAttachmentState();
 	builder._pipelineLayout = *m_pipeline.layout;
-	//builder._vertexInputInfo = GfxPipelineBuilder::CreateVertexInputStateInfo(); TODO lifetime of this was weird?
+	builder._vertexDescription = Vertex::GetDescription();
 
 	m_pipeline.pipeline = builder.BuildPipeline(m_pDevice->GetDevice(), *m_renderPass);
 
@@ -195,10 +250,16 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	//TODO move out
 	m_timingQueryPool = m_pDevice->CreateQueryPool(k_queryPoolCount);
 
+
+	//TODO move out
+	vk::raii::ShaderModule textVertShader = LoadShaderModule("text.vert.spv");
+	vk::raii::ShaderModule textFragShader = LoadShaderModule("text.frag.spv");
+	m_textOverlay = GfxTextOverlay(m_pDevice, *m_frames[0].commandPool, builder._viewport, builder._scissor, *textVertShader, *textFragShader);
 }
 
 GfxEngine::~GfxEngine()
 {
+	m_pDevice->GetDevice().waitIdle();
 }
 
 void GfxEngine::Render()
@@ -211,6 +272,7 @@ void GfxEngine::Render()
 	m_pDevice->GetDevice().waitForFences(*frame.renderCompleteFence, VK_TRUE /*wait all*/, k_renderCompleteTimeout_ns);
 	m_pDevice->GetDevice().resetFences(*frame.renderCompleteFence);
 
+	//TODO verify timing results somehow?
 	//Grab previous frame perf results
 	auto [queryResult, resultData] = m_timingQueryPool.getResults<double>(
 		0/*first query*/,
@@ -226,10 +288,12 @@ void GfxEngine::Render()
 
 	frame.commandPool.reset();
 	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-	frame.commandBuffer.begin(beginInfo);
+	frame.commandBuffers[0].begin(beginInfo);
 
-	frame.commandBuffer.resetQueryPool(*m_timingQueryPool, 0, k_queryPoolCount);
-	frame.commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 0);
+	frame.commandBuffers[0].resetQueryPool(*m_timingQueryPool, 0, k_queryPoolCount);
+	frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, *m_timingQueryPool, 0);
+
+	//TODO wait on image transition manually as subpass dependencies don't seem to be waiting?
 
 	vk::ClearColorValue const k_clearColor(std::array<float, 4>{48.0f / 2550.f, 10.0f / 255.0f, 36.0f / 255.0f, 1.0f});
 	vk::ClearDepthStencilValue const k_depthClear(1.0f, 0); //1.0 is max depth
@@ -242,28 +306,31 @@ void GfxEngine::Render()
 	glm::mat4 const model = glm::rotate(glm::identity<glm::mat4>(), glm::radians(m_numFramesRendered * 0.4f), glm::vec3(0.5f,0.5f, 0.0f));
 	glm::mat4 const mvp = m_camera.GetViewProj() * model;
 
-	frame.commandBuffer.beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
-	frame.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
-	frame.commandBuffer.bindVertexBuffers(0/*first binding*/, *m_cubeVertexBuffer.m_buffer, { 0 } /*offset*/);
-	frame.commandBuffer.bindIndexBuffer(*m_cubeIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint16);
+	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
+	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
+	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *m_cubeVertexBuffer.m_buffer, { 0 } /*offset*/);
+	frame.commandBuffers[0].bindIndexBuffer(*m_cubeIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint16);
 
 	glm::mat4 const model2 = glm::translate(glm::identity<glm::mat4>(), glm::vec3(-0.5, -0.5f, -0.5f));
 	glm::mat4 const mvp2 = m_camera.GetViewProj() * model2;
-	frame.commandBuffer.pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp2);
-	frame.commandBuffer.drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
+	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp2);
+	frame.commandBuffers[0].drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
 
-	frame.commandBuffer.pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
-	frame.commandBuffer.drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
+	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
+	frame.commandBuffers[0].drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
 	
-	frame.commandBuffer.endRenderPass();
+	frame.commandBuffers[0].endRenderPass();
 
-	frame.commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 1);
-	frame.commandBuffer.end();
+	frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 1);
+	frame.commandBuffers[0].end();
+
+	m_textOverlay.RenderTextOverlay(frame, renderArea, *frame.commandBuffers[1]);
 
 	vk::PipelineStageFlags const submitStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
 	vk::Queue const queue = m_pDevice->GetGraphicsQueue();
-	vk::SubmitInfo renderSubmitInfo(*frame.aquireImageSemaphore, submitStageMask, *frame.commandBuffer, *frame.readyToPresentSemaphore);
+	std::vector<vk::CommandBuffer> submitted{ *frame.commandBuffers[0], *frame.commandBuffers[1] };
+	vk::SubmitInfo renderSubmitInfo(*frame.aquireImageSemaphore, submitStageMask, submitted, *frame.readyToPresentSemaphore);
 	queue.submit(renderSubmitInfo, *frame.renderCompleteFence);
 
 	vk::PresentInfoKHR presentInfo(*frame.readyToPresentSemaphore, *m_swapChain.m_swapchain, imageIndex);
@@ -279,7 +346,7 @@ void GfxEngine::Render()
 
 vk::raii::ShaderModule GfxEngine::LoadShaderModule(std::string const& filePath)
 {
-	//TODO RAII files?
+	//TODO RAII files
 	std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open())

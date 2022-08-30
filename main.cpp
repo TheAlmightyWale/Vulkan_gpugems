@@ -1,4 +1,5 @@
 #include "App.h"
+#include "Logger.h"
 
 int main() {
 	App application("GpuGems");
@@ -8,4 +9,6 @@ int main() {
 	{
 		application.Process();
 	}
+
+	SPDLOG_INFO("Exiting App");
 }

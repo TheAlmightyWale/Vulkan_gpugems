@@ -3,11 +3,11 @@
 #include "GfxFwdDecl.h"
 
 struct GfxImage {
-	GfxImage():
+	GfxImage() noexcept:
 		image(nullptr),
 		view(nullptr),
 		memory(nullptr),
-		sampler()
+		sampler(nullptr)
 	{}
 
 	vk::raii::Image image;

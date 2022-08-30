@@ -6,7 +6,6 @@ uint32_t const k_appVersion = 1;
 
 App::App(std::string const& appName)
 	: m_appName(appName)
-	, m_bShouldQuit(false)
 	, m_pGfxEngine(nullptr)
 {
 	Logger::InitLogger();
@@ -39,18 +38,15 @@ void App::Start() {
 }
 
 bool App::ShouldQuit() noexcept{
-	return m_bShouldQuit;
+	return m_pWindow->ShouldClose();
 }
 
 void App::Process() {
 	//Topmost error handler
 	try
 	{
-		while (!m_pWindow->ShouldClose())
-		{
-			glfwPollEvents();
-			m_pGfxEngine->Render();
-		}
+		glfwPollEvents();
+		m_pGfxEngine->Render();
 	}
 	catch (std::exception& err)
 	{

@@ -7,6 +7,7 @@
 #include "GfxPipeline.h"
 #include "Mesh.h"
 #include "GfxBuffer.h"
+#include "GfxTextOverlay.h"
 #include "Camera.h"
 
 std::string const k_engineName = "Vulkan?";
@@ -21,6 +22,12 @@ public:
 	GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow);
 	~GfxEngine();
 
+	GfxEngine(GfxEngine const&) = delete;
+	GfxEngine(GfxEngine&&) = delete;
+	GfxEngine& operator=(GfxEngine const&) = delete;
+	GfxEngine& operator=(GfxEngine&&) = delete;
+
+
 	void Render();
 
 protected:
@@ -30,18 +37,22 @@ private:
 
 	vk::raii::ShaderModule LoadShaderModule(std::string const& filePath);
 
-	std::shared_ptr<GfxDevice> m_pDevice;
+	WindowPtr_t m_pWindow;
 	std::shared_ptr<GfxApiInstance> m_pInstance;
+	std::shared_ptr<GfxDevice> m_pDevice;
 
 	//TODO find a home
+	vk::raii::SurfaceKHR m_surface;
+	GfxSwapchain m_swapChain;
 	vk::raii::RenderPass m_renderPass;
 	std::vector<GfxFrame> m_frames;
-	GfxSwapchain m_swapChain;
 	GfxImage m_depthBuffer;
-	vk::raii::SurfaceKHR m_surface;
 	GfxPipeline m_pipeline;
 
 	vk::raii::Queue m_graphicsQueue;
+
+	//Functionality
+	GfxTextOverlay m_textOverlay;
 
 	Mesh m_cube;
 	GfxBuffer m_cubeVertexBuffer;
@@ -51,10 +62,11 @@ private:
 
 	uint64_t m_numFramesRendered;
 
-	WindowPtr_t m_pWindow;
-
 	//Perf timers
 	vk::raii::QueryPool m_timingQueryPool;
+
+	//TODO turn into hash map with hash based on sampler properties
+	std::vector<vk::raii::Sampler> m_samplers;
 
 };
 
