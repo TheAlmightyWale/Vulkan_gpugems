@@ -68,7 +68,7 @@ GfxTextOverlay::GfxTextOverlay(
 		vk::SharingMode::eExclusive
 	);
 
-	textImage = pDevice->CreateImage(createInfo, vk::ImageAspectFlagBits::eColor);
+	textImage = pDevice->CreateImage(createInfo, vk::ImageAspectFlagBits::eColor, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
 	//Stage data
 	vk::DeviceSize size = textImage.image.getMemoryRequirements().size;

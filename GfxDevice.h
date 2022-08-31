@@ -18,7 +18,7 @@ public:
 	vk::raii::Semaphore CreateVkSemaphore();
 	vk::raii::Fence CreateFence();
 	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlags flags);
-	GfxImage CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect);
+	GfxImage CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect, vk::MemoryPropertyFlagBits desiredMemoryProperties);
 	vk::raii::QueryPool CreateQueryPool(uint32_t queryCount);
 	vk::raii::Sampler CreateTextureSampler();
 	

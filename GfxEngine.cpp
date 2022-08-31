@@ -74,10 +74,9 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Create device
 	vk::PhysicalDeviceFeatures desiredFeatures;
-	//desiredFeatures.geometryShader = VK_TRUE;
 	vk::PhysicalDeviceProperties desiredProperties;
-	//desiredProperties.deviceType = vk::PhysicalDeviceType::eDiscreteGpu;
-	desiredProperties.deviceType = vk::PhysicalDeviceType::eIntegratedGpu;
+	desiredProperties.deviceType = vk::PhysicalDeviceType::eDiscreteGpu;
+	//desiredProperties.deviceType = vk::PhysicalDeviceType::eIntegratedGpu;
 	desiredProperties.apiVersion = k_vulkanVersion;
 
 	m_pDevice = std::make_shared<GfxDevice>(m_pInstance->GetInstance(), desiredFeatures, desiredProperties, k_deviceExtensions, k_deviceLayers);
@@ -91,12 +90,14 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_surface = std::move(vk::raii::SurfaceKHR(m_pInstance->GetInstance(), _surface));
 	m_swapChain = m_pDevice->CreateSwapChain(*m_surface, k_numFramesBuffered);
 
+	//TODO detect depth surface formats
 	vk::Format depthSurfaceFormat = vk::Format::eD16Unorm;
 	auto [width, height] = pWindow->GetWindowSize();
 	m_depthBuffer = m_pDevice->CreateDepthStencil(width, height, depthSurfaceFormat);
 
 	//Create attachments
 	//Attachments describe what image formats/target formats we want write to / read from
+	//TODO detect render surface formats
 	vk::Format renderSurfaceFormat = vk::Format::eB8G8R8A8Unorm;
 
 	std::array<vk::AttachmentDescription, 2> renderPassAttachments;

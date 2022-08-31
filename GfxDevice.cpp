@@ -8,29 +8,29 @@
 #include <bitset>
 
 
-uint32_t FindMemoryType(vk::PhysicalDeviceMemoryProperties const& memoryProperties, uint32_t typeBits, vk::MemoryPropertyFlags requirementsMask)
+uint32_t FindMemoryType(vk::PhysicalDeviceMemoryProperties const& memoryProperties, uint32_t requiredTypeBits, vk::MemoryPropertyFlags requiredProperties)
 {
-	uint32_t typeIndex = uint32_t(~0);
+	uint32_t typeIndex = uint32_t{ ~0 };
 	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
 	{
-		if ((typeBits & 1) && ((memoryProperties.memoryTypes[i].propertyFlags & requirementsMask) == requirementsMask))
+		if ((requiredTypeBits & 1) && ((memoryProperties.memoryTypes.at(i).propertyFlags & requiredProperties) == requiredProperties))
 		{
 			typeIndex = i;
 			break;
 		}
-		typeBits >>= 1;
+		requiredTypeBits >>= 1;
 	}
 
 	//TODO figure out fallbacks rather than erroring out? maybe okay for that to be the callers responsibility?
-	if (typeIndex == uint32_t(~0)) {
+	if (typeIndex == uint32_t{ ~0 }) {
 		throw InvalidStateException("Could not find desired memory type");
 	}
 
 	return typeIndex;
 }
 
-//This isnt great, would be nicer to have a generic way to check what member variables are not default and only compare them
-// This also assumes RHS is a default construced object with onyl a couple of fields set, rahter than considering both LHS and RHS
+//TODO This isnt great, would be nicer to have a generic way to check what member variables are not default and only compare them
+// This also assumes RHS is a default construced object with only a couple of fields set, rahter than considering both LHS and RHS
 bool CompareOnlyNonDefaultFields(vk::PhysicalDeviceProperties const& actual, vk::PhysicalDeviceProperties const& desired)
 {
 	vk::PhysicalDeviceProperties defaultProps;
@@ -260,10 +260,10 @@ GfxImage GfxDevice::CreateDepthStencil(uint32_t width, uint32_t height, vk::Form
 
 	SPDLOG_DEBUG("Creating Depth Buffer");
 
-	return CreateImage(depthStencilCreateInfo, aspect);
+	return CreateImage(depthStencilCreateInfo, aspect, vk::MemoryPropertyFlagBits::eDeviceLocal);
 }
 
-GfxImage GfxDevice::CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect)
+GfxImage GfxDevice::CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect, vk::MemoryPropertyFlagBits desiredMemoryProperties)
 {
 	GfxImage image;
 	image.image = vk::raii::Image(*m_pDevice.get(), createInfo);
@@ -271,7 +271,7 @@ GfxImage GfxDevice::CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectF
 	vk::PhysicalDeviceMemoryProperties memoryProperties = m_physcialDevice.getMemoryProperties();
 	vk::MemoryRequirements memoryRequirements = image.image.getMemoryRequirements();
 
-	uint32_t typeIndex = FindMemoryType(memoryProperties, memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+	uint32_t typeIndex = FindMemoryType(memoryProperties, memoryRequirements.memoryTypeBits, desiredMemoryProperties);
 
 	vk::MemoryAllocateInfo memoryAllocateInfo(memoryRequirements.size, typeIndex);
 	image.memory = vk::raii::DeviceMemory(*m_pDevice.get(), memoryAllocateInfo);
