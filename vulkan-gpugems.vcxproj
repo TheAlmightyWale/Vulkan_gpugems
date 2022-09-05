@@ -79,14 +79,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\include\GLFW;$(IncludePath)</IncludePath>
-    <LibraryPath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\lib-vc2022;$(VULKAN_SDK)\Lib\;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\lib-vc2022;$(VULKAN_SDK)\Lib\;$(ProjectDir)lib\fast_obj;$(LibraryPath)</LibraryPath>
     <RunCodeAnalysis>false</RunCodeAnalysis>
     <CodeAnalysisRuleSet>core_guidlines.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <IncludePath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\include\GLFW;$(IncludePath)</IncludePath>
-    <LibraryPath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\lib-vc2022;$(VULKAN_SDK)\Lib\;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\lib-vc2022;$(VULKAN_SDK)\Lib\;$(ProjectDir)lib\fast_obj;$(LibraryPath)</LibraryPath>
     <RunCodeAnalysis>false</RunCodeAnalysis>
     <CodeAnalysisRuleSet>core_guidlines.ruleset</CodeAnalysisRuleSet>
     <EnableMicrosoftCodeAnalysis>false</EnableMicrosoftCodeAnalysis>
@@ -200,7 +200,24 @@
     <ClCompile Include="GfxEngine.cpp" />
     <ClCompile Include="GfxPipelineBuilder.cpp" />
     <ClCompile Include="GfxTextOverlay.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\allocator.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\clusterizer.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\indexcodec.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\indexgenerator.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\overdrawanalyzer.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\overdrawoptimizer.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\simplifier.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\spatialorder.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\stripifier.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\vcacheanalyzer.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\vcacheoptimizer.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\vertexcodec.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\vertexfilter.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\vfetchanalyzer.cpp" />
+    <ClCompile Include="lib\meshoptimizer\src\vfetchoptimizer.cpp" />
+    <ClCompile Include="lib\objparser\objparser.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ModelLoader.cpp" />
     <ClCompile Include="Window.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -219,9 +236,12 @@
     <ClInclude Include="GfxPipelineBuilder.h" />
     <ClInclude Include="GfxSwapChain.h" />
     <ClInclude Include="GfxTextOverlay.h" />
+    <ClInclude Include="lib\meshoptimizer\src\meshoptimizer.h" />
+    <ClInclude Include="lib\objparser\objparser.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Math.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="ModelLoader.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
@@ -244,7 +264,7 @@
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <PropertyGroup Condition="'$(Language)'=='C++'">
-    <IncludePath>$(ProjectDir)include;$(VULKAN_SDK)\include;.\GeneratedFiles;$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\include\GLFW;$(VULKAN_SDK)\Include\Volk;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(VULKAN_SDK)\include;.\GeneratedFiles;$(ProjectDir)lib\glfw-3.3.7.bin.WIN64\include\GLFW;$(VULKAN_SDK)\Include\Volk;$(ProjectDir)lib\meshoptimizer\src;$(ProjectDir)lib\fast_obj;$(IncludePath)</IncludePath>
     <CAExcludePath>$(ProjectDir)\lib;.\GeneratedFiles;$(CAExcludePath)</CAExcludePath>
   </PropertyGroup>
 </Project>

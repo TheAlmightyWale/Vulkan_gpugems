@@ -16,6 +16,15 @@
     <Filter Include="Resource Files\Shaders">
       <UniqueIdentifier>{ffdfb449-0eea-4df6-8087-072244410481}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Extern">
+      <UniqueIdentifier>{69ff8fde-726d-4a62-9795-b77acd65f52d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Extern\MeshOptimizer">
+      <UniqueIdentifier>{1aaaa4be-bae5-43fa-862c-28ee5d9e2b06}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Extern\ObjParser">
+      <UniqueIdentifier>{d642fe6f-fe0b-4697-a3f1-5930a7a607b3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -47,6 +56,57 @@
     </ClCompile>
     <ClCompile Include="GfxTextOverlay.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ModelLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\allocator.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\clusterizer.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\indexcodec.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\indexgenerator.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\overdrawanalyzer.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\overdrawoptimizer.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\simplifier.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\spatialorder.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\stripifier.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\vcacheanalyzer.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\vcacheoptimizer.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\vertexcodec.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\vertexfilter.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\vfetchanalyzer.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\meshoptimizer\src\vfetchoptimizer.cpp">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\objparser\objparser.cpp">
+      <Filter>Extern\ObjParser</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -106,6 +166,15 @@
     </ClInclude>
     <ClInclude Include="GfxTextOverlay.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ModelLoader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\meshoptimizer\src\meshoptimizer.h">
+      <Filter>Extern\MeshOptimizer</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\objparser\objparser.h">
+      <Filter>Extern\ObjParser</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

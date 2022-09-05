@@ -55,8 +55,8 @@ private:
 	GfxTextOverlay m_textOverlay;
 
 	Mesh m_cube;
-	GfxBuffer m_cubeVertexBuffer;
-	GfxBuffer m_cubeIndexBuffer;
+	GfxBuffer m_modelVertexBuffer;
+	GfxBuffer m_modelIndexBuffer;
 
 	Camera m_camera;
 

@@ -8,13 +8,13 @@ uint32_t constexpr const k_cubeIndicesCount = 6 * 6;
 float const k_cubeVertices[k_cubeVertexValuesCount] =
 {
     0.0f, 0.0f, 0.0f,
-    1, 0.0f, 0.0f,
-    1, 1, 0.0f,
-    0.0f, 1, 0.0f,
-    0.0f, 0.0f, 1,
-    1, 0.0f, 1,
-    1, 1, 1,
-    0.0f, 1, 1
+    1.0f, 0.0f, 0.0f,
+    1.0f, 1.0f, 0.0f,
+    0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 1.0f,
+    1.0f, 0.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    0.0f, 1.0f, 1.0f
 };
 
 float texCoords[2 * 6] =

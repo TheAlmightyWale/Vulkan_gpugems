@@ -15,6 +15,8 @@
 
 //TODO move somewhere else also
 #include "Cube.h"
+#include "ModelLoader.h"
+
 Mesh LoadCube()
 {
 	Mesh cube;
@@ -62,8 +64,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_graphicsQueue(nullptr)
 	, m_textOverlay()
 	, m_cube()
-	, m_cubeVertexBuffer()
-	, m_cubeIndexBuffer()
+	, m_modelVertexBuffer()
+	, m_modelIndexBuffer()
 	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
 	, m_numFramesRendered(0)
 	, m_timingQueryPool(nullptr)
@@ -230,7 +232,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	builder._scissor.setOffset({ 0, 0 }); 
 	builder._scissor.setExtent({ width, height });
 
-	builder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack);
+	builder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone);
 	builder._depthStencil = GfxPipelineBuilder::CreateDepthStencilStateInfo(VK_TRUE, VK_TRUE, vk::CompareOp::eLess);
 	builder._multisampling = GfxPipelineBuilder::CreateMultisampleStateInfo();
 	builder._colorBlendAttachment = GfxPipelineBuilder::CreateColorBlendAttachmentState();
@@ -241,12 +243,12 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Todo move scene loading somewhere else
 	// good rust candidate?
-	Mesh cube = LoadCube();
-	m_cubeVertexBuffer = m_pDevice->CreateBuffer(cube.vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
-	m_cubeIndexBuffer = m_pDevice->CreateBuffer(cube.indices.size() * sizeof(uint16_t), vk::BufferUsageFlagBits::eIndexBuffer);
+	Mesh pirate = ModelLoader::LoadModel("C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj");
+	m_modelVertexBuffer = m_pDevice->CreateBuffer(pirate.vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
+	m_modelIndexBuffer = m_pDevice->CreateBuffer(pirate.indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eIndexBuffer);
 
-	memcpy(m_cubeVertexBuffer.m_pData, cube.vertices.data(), m_cubeVertexBuffer.m_dataSize);
-	memcpy(m_cubeIndexBuffer.m_pData, cube.indices.data(), m_cubeIndexBuffer.m_dataSize);
+	memcpy(m_modelVertexBuffer.m_pData, pirate.vertices.data(), m_modelVertexBuffer.m_dataSize);
+	memcpy(m_modelIndexBuffer.m_pData, pirate.indices.data(), m_modelIndexBuffer.m_dataSize);
 
 	//TODO move out
 	m_timingQueryPool = m_pDevice->CreateQueryPool(k_queryPoolCount);
@@ -282,8 +284,8 @@ void GfxEngine::Render()
 		sizeof(uint64_t),
 		vk::QueryResultFlagBits::e64);
 
-	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod * 1e-6;
-	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod * 1e-6;
+	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod *1e+6; //timestamp period changes to ns e+6 takes us to ms
+	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod *1e+6;
 
 	auto [result, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
 
@@ -303,22 +305,26 @@ void GfxEngine::Render()
 	vk::Rect2D const renderArea({ 0,0 }, m_swapChain.m_extent);
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
-	//Rotate cube
+	//Rotate model
 	glm::mat4 const model = glm::rotate(glm::identity<glm::mat4>(), glm::radians(m_numFramesRendered * 0.4f), glm::vec3(0.5f,0.5f, 0.0f));
 	glm::mat4 const mvp = m_camera.GetViewProj() * model;
 
 	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
 	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
-	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *m_cubeVertexBuffer.m_buffer, { 0 } /*offset*/);
-	frame.commandBuffers[0].bindIndexBuffer(*m_cubeIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint16);
+	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *m_modelVertexBuffer.m_buffer, { 0 } /*offset*/);
+	frame.commandBuffers[0].bindIndexBuffer(*m_modelIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint32);
 
-	glm::mat4 const model2 = glm::translate(glm::identity<glm::mat4>(), glm::vec3(-0.5, -0.5f, -0.5f));
+	glm::mat4 model2 = glm::translate(glm::identity<glm::mat4>(), glm::vec3(-0.5, -0.5f, -0.5f));
+	model2 = glm::scale(model2, glm::vec3(0.1f, 0.1f, 0.1f));
 	glm::mat4 const mvp2 = m_camera.GetViewProj() * model2;
 	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp2);
-	frame.commandBuffers[0].drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
+	frame.commandBuffers[0].drawIndexed(m_modelIndexBuffer.m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
 
-	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
-	frame.commandBuffers[0].drawIndexed(m_cubeIndexBuffer.m_dataSize / sizeof(uint16_t), 1/*instance count*/, 0, 0, 0);
+	for (int i = 0; i < 100; ++i)
+	{
+		frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
+		frame.commandBuffers[0].drawIndexed(m_modelIndexBuffer.m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
+	}
 	
 	frame.commandBuffers[0].endRenderPass();
 

@@ -10,7 +10,7 @@
 
 uint32_t FindMemoryType(vk::PhysicalDeviceMemoryProperties const& memoryProperties, uint32_t requiredTypeBits, vk::MemoryPropertyFlags requiredProperties)
 {
-	uint32_t typeIndex = uint32_t{ ~0 };
+	uint32_t typeIndex = uint32_t(~0);
 	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
 	{
 		if ((requiredTypeBits & 1) && ((memoryProperties.memoryTypes.at(i).propertyFlags & requiredProperties) == requiredProperties))
@@ -22,7 +22,7 @@ uint32_t FindMemoryType(vk::PhysicalDeviceMemoryProperties const& memoryProperti
 	}
 
 	//TODO figure out fallbacks rather than erroring out? maybe okay for that to be the callers responsibility?
-	if (typeIndex == uint32_t{ ~0 }) {
+	if (typeIndex == uint32_t(~0)) {
 		throw InvalidStateException("Could not find desired memory type");
 	}
 
