@@ -234,10 +234,36 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t 
 			1 /*layer count*/ }
 	);
 	
-	for (auto image : swapChainImages)
+	for (VkImage const& image : swapChainImages)
 	{
 		imageViewCreateInfo.image = static_cast<vk::Image>(image);
 		gfxSwapchain.m_imageViews.push_back({*m_pDevice.get(), imageViewCreateInfo});
+
+		//TODO split out transfer / transition work into bulk worker queue
+		//transition image to presentKHR
+		vk::raii::CommandPool commandPool = CreateGraphicsCommandPool();
+		vk::raii::CommandBuffer transitionBuffer = std::move(CreateCommandBuffers(*commandPool, 1).front());
+		vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+		transitionBuffer.begin(beginInfo);
+		vk::ImageMemoryBarrier transitionBarrier = CreateImageTransition(
+			vk::AccessFlagBits::eColorAttachmentWrite,
+			vk::AccessFlagBits::eNone,
+			vk::ImageLayout::eUndefined,
+			vk::ImageLayout::ePresentSrcKHR,
+			static_cast<vk::Image>(image)
+		);
+		transitionBuffer.pipelineBarrier(
+			vk::PipelineStageFlagBits::eColorAttachmentOutput,
+			vk::PipelineStageFlagBits::eBottomOfPipe,
+			vk::DependencyFlagBits::eByRegion,
+			nullptr, nullptr,
+			transitionBarrier
+		);
+		transitionBuffer.end();
+
+		vk::SubmitInfo submitInfo(nullptr, nullptr, *transitionBuffer, nullptr);
+		GetGraphicsQueue().submit(submitInfo);
+		m_pDevice->waitIdle();
 	}
 
 	return gfxSwapchain;
@@ -296,6 +322,22 @@ GfxImage GfxDevice::CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectF
 	SPDLOG_DEBUG("Created image resource with dimensions x:{0}, y:{1}", createInfo.extent.width, createInfo.extent.height);
 
 	return image;
+}
+
+vk::ImageMemoryBarrier GfxDevice::CreateImageTransition(vk::AccessFlagBits sourceAccess, vk::AccessFlagBits destinationAccess, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::Image image)
+{
+	vk::ImageSubresourceRange range(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS);
+	vk::ImageMemoryBarrier barrier(
+		sourceAccess,
+		destinationAccess,
+		oldLayout,
+		newLayout,
+		VK_QUEUE_FAMILY_IGNORED,
+		VK_QUEUE_FAMILY_IGNORED,
+		image,
+		range
+	);
+	return barrier;
 }
 
 vk::raii::Semaphore GfxDevice::CreateVkSemaphore()

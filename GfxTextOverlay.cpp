@@ -80,24 +80,12 @@ GfxTextOverlay::GfxTextOverlay(
 	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	copyCommands.begin(beginInfo);
 
-	//TODO split out
 	//Create image barrier to perform layout transition if needed
-	vk::ImageMemoryBarrier preCopyBarrier(
-		vk::AccessFlagBits::eNone,
+	vk::ImageMemoryBarrier preCopyBarrier = pDevice->CreateImageTransition(vk::AccessFlagBits::eNone,
 		vk::AccessFlagBits::eTransferWrite,
 		vk::ImageLayout::eUndefined,
 		vk::ImageLayout::eTransferDstOptimal,
-		VK_QUEUE_FAMILY_IGNORED,
-		VK_QUEUE_FAMILY_IGNORED,
-		*textImage.image,
-		vk::ImageSubresourceRange(
-			vk::ImageAspectFlagBits::eColor,
-			0 /*base mip level*/,
-			1 /* level count*/,
-			0 /* base array layer*/,
-			1 /*layer count*/
-		)
-	);
+		*textImage.image);
 
 	copyCommands.pipelineBarrier(
 		vk::PipelineStageFlagBits::eTopOfPipe,
@@ -130,25 +118,14 @@ GfxTextOverlay::GfxTextOverlay(
 		copyRegion
 	);
 
-	//Graphics and transfer are currently the same queue so no need to transition queues
-	vk::ImageMemoryBarrier postCopyMemoryBarrier(
+	vk::ImageMemoryBarrier postCopyMemoryBarrier = pDevice->CreateImageTransition(
 		vk::AccessFlagBits::eTransferWrite,
 		vk::AccessFlagBits::eShaderRead,
 		//Transfer layout to shader read only
 		vk::ImageLayout::eTransferDstOptimal,
 		vk::ImageLayout::eShaderReadOnlyOptimal,
-		VK_QUEUE_FAMILY_IGNORED,
-		VK_QUEUE_FAMILY_IGNORED,
-		*textImage.image,
-		vk::ImageSubresourceRange(
-			vk::ImageAspectFlagBits::eColor,
-			0 /*base mip level*/,
-			1 /* level count*/,
-			0 /* base array layer*/,
-			1 /*layer count*/
-		)
+		*textImage.image
 	);
-
 	copyCommands.pipelineBarrier(
 		vk::PipelineStageFlagBits::eTransfer,
 		vk::PipelineStageFlagBits::eFragmentShader,

@@ -19,6 +19,12 @@ public:
 	vk::raii::Fence CreateFence();
 	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlags flags);
 	GfxImage CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect, vk::MemoryPropertyFlagBits desiredMemoryProperties);
+	vk::ImageMemoryBarrier CreateImageTransition(
+		vk::AccessFlagBits sourceAccess,
+		vk::AccessFlagBits destinationAccess,
+		vk::ImageLayout oldLayout,
+		vk::ImageLayout newLayout,
+		vk::Image image);
 	vk::raii::QueryPool CreateQueryPool(uint32_t queryCount);
 	vk::raii::Sampler CreateTextureSampler();
 	
