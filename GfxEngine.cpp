@@ -84,8 +84,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_pDevice = std::make_shared<GfxDevice>(m_pInstance->GetInstance(), desiredFeatures, desiredProperties, k_deviceExtensions, k_deviceLayers);
 
 	//Load shaders
-	vk::raii::ShaderModule fragmentShader = LoadShaderModule("triangle.frag.spv");
-	vk::raii::ShaderModule vertexShader = LoadShaderModule("triangle.vert.spv");
+	vk::raii::ShaderModule fragmentShader = LoadShaderModule("gooch.frag.spv");
+	vk::raii::ShaderModule vertexShader = LoadShaderModule("gooch.vert.spv");
 
 	VkSurfaceKHR _surface;
 	glfwCreateWindowSurface(*m_pInstance->GetInstance(), pWindow->Get(), nullptr, &_surface);

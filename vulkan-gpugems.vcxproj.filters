@@ -190,5 +190,11 @@
     <CustomBuild Include="text.vert">
       <Filter>Resource Files\Shaders</Filter>
     </CustomBuild>
+    <CustomBuild Include="gooch.frag">
+      <Filter>Resource Files\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="gooch.vert">
+      <Filter>Resource Files\Shaders</Filter>
+    </CustomBuild>
   </ItemGroup>
 </Project>
