@@ -5,4 +5,5 @@
 class ModelLoader {
 public:
 	static Mesh LoadModel(std::string const& filePath);
+	static Mesh LoadCube();
 };

@@ -4,37 +4,32 @@
 //TODO turn mesh optimizer into a library
 #include "lib/meshoptimizer/src/meshoptimizer.h"
 
-//class ObjRaii
-//{
-//public:
-//	ObjRaii(std::string const& filePath)
-//	{
-//		m_pMesh = fast_obj_read(filePath.c_str());
-//		if (m_pMesh == nullptr)
-//		{
-//			throw InitializationException("Failed to load mesh from: " + filePath);
-//		}
-//	}
-//
-//	ObjRaii(ObjRaii const&) = delete;
-//	ObjRaii(ObjRaii&&) = delete;
-//	ObjRaii& operator=(ObjRaii const&) = delete;
-//	ObjRaii& operator=(ObjRaii&&) = delete;
-//
-//	~ObjRaii()
-//	{
-//		if (m_pMesh)
-//			fast_obj_destroy(m_pMesh);
-//	}
-//
-//	fastObjMesh* GetMesh() const
-//	{
-//		return m_pMesh;
-//	}
-//
-//private:
-//	fastObjMesh* m_pMesh;
-//};
+#include "Cube.h"
+
+Mesh ModelLoader::LoadCube()
+{
+	Mesh cube;
+	for (uint32_t i = 0; i < k_cubeVertexValuesCount; i += 3)
+	{
+		Vertex v{};
+		v.vx = k_cubeVertices[i + 0];
+		v.vy = k_cubeVertices[i + 1];
+		v.vz = k_cubeVertices[i + 2];
+
+		v.nx = k_cubeNormals[i + 0];
+		v.ny = k_cubeNormals[i + 1];
+		v.nz = k_cubeNormals[i + 2];
+
+		cube.vertices.push_back(v);
+	}
+
+	for (uint16_t index : k_cubeIndices)
+	{
+		cube.indices.push_back(index);
+	}
+
+	return cube;
+}
 
 //TODO don't copy mesh on return
 Mesh ModelLoader::LoadModel(std::string const& filePath)
@@ -78,67 +73,4 @@ Mesh ModelLoader::LoadModel(std::string const& filePath)
 	meshopt_remapIndexBuffer(mesh.indices.data(), nullptr, indexCount, remap.data());
 
 	return mesh;
-
-	//TODO remove leftover fast_obj stuff
-
-	//auto* const pMesh = parsedObj.GetMesh();
-
-	////Create mesh object then optimize it
-	//size_t totalIndices = 0;
-	//for (uint32_t i = 0; i < pMesh->face_count; ++i)
-	//{
-	//	//TODO why 2?
-	//	totalIndices += 3 * (pMesh->face_vertices[i] - 2);
-	//}
-
-	//std::vector<Vertex> vertices(totalIndices);
-	//std::vector<uint32_t> indices(totalIndices);
-
-	//size_t vertexOffset = 0;
-	//size_t indexOffset = 0;
-
-	//for (uint32_t faceIndex = 0; faceIndex < pMesh->face_count; ++faceIndex)
-	//{
-	//	for (uint32_t faceVertexIndex = 0; faceVertexIndex < pMesh->face_vertices[faceIndex]; ++faceVertexIndex)
-	//	{
-	//		fastObjIndex index = pMesh->indices[indexOffset + faceVertexIndex];
-	//		Vertex vert =
-	//		{
-	//			pMesh->positions[index.p * 3 + 0],
-	//			pMesh->positions[index.p * 3 + 1],
-	//			pMesh->positions[index.p * 3 + 2],
-	//			pMesh->normals[index.n * 3 + 0],
-	//			pMesh->normals[index.n * 3 + 1],
-	//			pMesh->normals[index.n * 3 + 2]
-	//		};
-
-	//		vertices[vertexOffset] = vert;
-	//		vertexOffset++;
-
-	//		if (faceVertexIndex >= 3)
-	//		{
-	//			//Triangulate
-	//			vertices[vertexOffset + 0] = vertices[vertexOffset - 3];
-	//			vertices[vertexOffset + 1] = vertices[vertexOffset - 1];
-	//			vertexOffset += 2;
-	//		}
-	//		indices[indexOffset + faceVertexIndex] = index.p;
-	//	}
-	//	indexOffset += pMesh->face_vertices[faceIndex];
-	//}
-
-	////Run loaded vertices through optimizer
-	//std::vector<uint32_t> remap(totalIndices);
-	//size_t totalVertices = meshopt_generateVertexRemap(remap.data(), indices.data(), totalIndices, vertices.data(), totalIndices, sizeof(Vertex));
-
-	//Mesh mesh;
-	//mesh.vertices.resize(totalVertices);
-	//mesh.indices.resize(totalIndices);
-
-	//meshopt_remapVertexBuffer(mesh.vertices.data(), vertices.data(), totalIndices, sizeof(Vertex), remap.data());
-	//meshopt_remapIndexBuffer(mesh.indices.data(), indices.data(), totalIndices, remap.data());
-
-	////TODO optimize vertex caching and fetching with mesh optimizer?
-
-	/*return mesh;*/
 }

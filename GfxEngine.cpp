@@ -13,34 +13,10 @@
 //TODO Temp for uniform buffer testing, move to camera class 
 #include "Math.h"
 
-//TODO move somewhere else also
-#include "Cube.h"
+//TODO move somewhere else
 #include "ModelLoader.h"
 
-Mesh LoadCube()
-{
-	Mesh cube;
-	for (uint32_t i = 0; i < k_cubeVertexValuesCount; i+= 3)
-	{
-		Vertex v{};
-		v.vx = k_cubeVertices[i + 0];
-		v.vy = k_cubeVertices[i + 1];
-		v.vz = k_cubeVertices[i + 2];
 
-		v.nx = k_cubeNormals[i + 0];
-		v.ny = k_cubeNormals[i + 1];
-		v.nz = k_cubeNormals[i + 2];
-
-		cube.vertices.push_back(v);
-	}
-
-	for (uint16_t index : k_cubeIndices)
-	{
-		cube.indices.push_back(index);
-	}
-
-	return cube;
-}
 //TODO wrap extensions and layers into configurable features?
 std::vector<const char*> const k_deviceExtensions{
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -131,29 +107,6 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		vk::ImageLayout::eUndefined,
 		vk::ImageLayout::eDepthStencilAttachmentOptimal
 	);
-
-	//std::vector<vk::SubpassDependency> renderPassDependencies = {
-	//	//colorAttachmentDependency
-	//	vk::SubpassDependency(
-	//		VK_SUBPASS_EXTERNAL,
-	//		0 /*dst subpass*/,
-	//		vk::PipelineStageFlagBits::eBottomOfPipe/*srcStage*/,
-	//		vk::PipelineStageFlagBits::eColorAttachmentOutput/*dstStage*/,
-	//		vk::AccessFlagBits::eNone /*src access mask*/,
-	//		vk::AccessFlagBits::eColorAttachmentWrite,
-	//		{} /*dependency flags*/
-	//	),
-	//	//depthDependency
-	//	vk::SubpassDependency(
-	//		VK_SUBPASS_EXTERNAL,
-	//		0,
-	//		vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
-	//		vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
-	//		vk::AccessFlagBits::eNone,
-	//		vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-	//		{}
-	//	)
-	//};
 
 	std::array<vk::SubpassDependency, 2> renderPassDependencies = {
 		//Transition swapchain image from final to initial
