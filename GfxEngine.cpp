@@ -16,7 +16,6 @@
 //TODO move somewhere else
 #include "ModelLoader.h"
 
-
 //TODO wrap extensions and layers into configurable features?
 std::vector<const char*> const k_deviceExtensions{
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -26,6 +25,14 @@ std::vector<const char*> const k_deviceExtensions{
 std::vector<const char*> const k_deviceLayers{
 	//Deprecated, but might be needed for backwards compatibility if we ever want it
 };
+
+std::vector<glm::vec3> const k_lightDirection{
+	glm::vec3(0.0f, -2.0f, 0.0f)
+};
+
+glm::vec3 const k_light(0.0f, -2.0f, 0.0f);
+
+uint32_t const k_lightBindingId = 0;
 
 GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow)
 	: m_pInstance(nullptr)
@@ -44,6 +51,9 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_modelIndexBuffer()
 	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
 	, m_numFramesRendered(0)
+	, m_lightDescriptorPool(nullptr)
+	, m_lightDescriptorLayout(nullptr)
+	, m_lightDescriptor(nullptr)
 	, m_timingQueryPool(nullptr)
 	, m_samplers()
 {
@@ -163,8 +173,42 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		m_frames[i].renderCompleteFence = m_pDevice->CreateFence();
 	}
 
+	//Camera variables
 	vk::PushConstantRange mvpMatrixPush(vk::ShaderStageFlagBits::eVertex, 0/*offset*/, sizeof(glm::mat4x4));
-	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), mvpMatrixPush, nullptr);
+
+	//Lights
+	vk::DescriptorSetLayoutBinding dslBinding(
+		k_lightBindingId /* binding Id*/,
+		vk::DescriptorType::eUniformBuffer,
+		1 /*descriptor count*/,
+		vk::ShaderStageFlagBits::eFragment,
+		nullptr
+	);
+
+	vk::DescriptorSetLayoutCreateInfo dslCreateInfo({}, dslBinding);
+	m_lightDescriptorLayout = vk::raii::DescriptorSetLayout(m_pDevice->GetDevice(), dslCreateInfo);
+	vk::DescriptorSetLayout lightLayout = *m_lightDescriptorLayout;
+	vk::DescriptorPoolSize poolSize(vk::DescriptorType::eUniformBuffer, 1);
+	vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo(
+		{},
+		1 /* max sets*/,
+		poolSize
+	);
+	m_lightDescriptorPool = vk::raii::DescriptorPool(m_pDevice->GetDevice(), descriptorPoolCreateInfo);
+	vk::DescriptorSetAllocateInfo lightDescriptorSet(*m_lightDescriptorPool, lightLayout);
+	m_lightDescriptor = std::move(m_pDevice->GetDevice().allocateDescriptorSets(lightDescriptorSet).front());
+	m_lightBuffer = m_pDevice->CreateBuffer(sizeof(k_light), vk::BufferUsageFlagBits::eUniformBuffer);
+	vk::DescriptorBufferInfo lightBufferInfo(*m_lightBuffer.m_buffer, 0, m_lightBuffer.m_dataSize);
+	vk::WriteDescriptorSet writeDescriptor(
+		*m_lightDescriptor,
+		k_lightBindingId,
+		0 /*array element*/,
+		vk::DescriptorType::eUniformBuffer,
+		nullptr, lightBufferInfo, nullptr);
+	m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
+	memcpy(m_lightBuffer.m_pData, &k_light, m_lightBuffer.m_dataSize);
+
+	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), mvpMatrixPush, lightLayout);
 
 	GfxPipelineBuilder builder;
 	builder._shaderStages.push_back(
@@ -266,18 +310,16 @@ void GfxEngine::Render()
 	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
 	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *m_modelVertexBuffer.m_buffer, { 0 } /*offset*/);
 	frame.commandBuffers[0].bindIndexBuffer(*m_modelIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint32);
+	frame.commandBuffers[0].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipeline.layout, 0, *m_lightDescriptor, nullptr);
 
 	glm::mat4 model2 = glm::translate(glm::identity<glm::mat4>(), glm::vec3(-0.5, -0.5f, -0.5f));
-	model2 = glm::scale(model2, glm::vec3(0.1f, 0.1f, 0.1f));
+	//model2 = glm::scale(model2, glm::vec3(0.1f, 0.1f, 0.1f));
 	glm::mat4 const mvp2 = m_camera.GetViewProj() * model2;
 	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp2);
 	frame.commandBuffers[0].drawIndexed(m_modelIndexBuffer.m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
 
-	for (int i = 0; i < 100; ++i)
-	{
-		frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
-		frame.commandBuffers[0].drawIndexed(m_modelIndexBuffer.m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
-	}
+	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
+	frame.commandBuffers[0].drawIndexed(m_modelIndexBuffer.m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
 	
 	frame.commandBuffers[0].endRenderPass();
 

@@ -58,9 +58,14 @@ private:
 	GfxBuffer m_modelVertexBuffer;
 	GfxBuffer m_modelIndexBuffer;
 
-	Camera m_camera;
-
 	uint64_t m_numFramesRendered;
+
+	//TODO move out scene info
+	Camera m_camera;
+	vk::raii::DescriptorPool m_lightDescriptorPool;
+	vk::raii::DescriptorSetLayout m_lightDescriptorLayout;
+	vk::raii::DescriptorSet m_lightDescriptor;
+	GfxBuffer m_lightBuffer;
 
 	//Perf timers
 	vk::raii::QueryPool m_timingQueryPool;
