@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include "GfxFwdDecl.h"
+#include "GfxBuffer.h"
 
 struct Vertex
 {
@@ -55,6 +56,11 @@ struct TextVertex
 
 struct Mesh
 {
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
+	GfxBuffer vertexBuffer;
+	GfxBuffer indexBuffer;
 };
+using MeshPtr_t = std::shared_ptr<Mesh>;
+
+
+using MeshPool = std::unordered_map<std::string, MeshPtr_t>;
+using MeshPoolPtr_t = std::shared_ptr<MeshPool>;

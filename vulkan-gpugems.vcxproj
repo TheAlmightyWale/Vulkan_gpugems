@@ -218,6 +218,7 @@
     <ClCompile Include="lib\objparser\objparser.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ModelLoader.cpp" />
+    <ClCompile Include="StaticModel.cpp" />
     <ClCompile Include="Window.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -242,6 +243,7 @@
     <ClInclude Include="Math.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="ModelLoader.h" />
+    <ClInclude Include="StaticModel.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>

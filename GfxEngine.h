@@ -5,10 +5,11 @@
 #include "GfxFrame.h"
 #include "GfxImage.h"
 #include "GfxPipeline.h"
-#include "Mesh.h"
+#include "StaticModel.h"
 #include "GfxBuffer.h"
 #include "GfxTextOverlay.h"
 #include "Camera.h"
+
 
 std::string const k_engineName = "Vulkan?";
 uint32_t const k_engineVersion = 1;
@@ -52,11 +53,12 @@ private:
 	vk::raii::Queue m_graphicsQueue;
 
 	//Functionality
+	//Text
 	GfxTextOverlay m_textOverlay;
 
-	Mesh m_cube;
-	GfxBuffer m_modelVertexBuffer;
-	GfxBuffer m_modelIndexBuffer;
+	//Meshes
+	MeshPoolPtr_t m_pMeshPool;
+	std::vector<StaticModelPtr_t> m_models;
 
 	uint64_t m_numFramesRendered;
 

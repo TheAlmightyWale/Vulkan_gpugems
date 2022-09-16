@@ -108,6 +108,9 @@
     <ClCompile Include="lib\objparser\objparser.cpp">
       <Filter>Extern\ObjParser</Filter>
     </ClCompile>
+    <ClCompile Include="StaticModel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math.h">
@@ -175,6 +178,9 @@
     </ClInclude>
     <ClInclude Include="lib\objparser\objparser.h">
       <Filter>Extern\ObjParser</Filter>
+    </ClInclude>
+    <ClInclude Include="StaticModel.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

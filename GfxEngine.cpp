@@ -13,8 +13,8 @@
 //TODO Temp for uniform buffer testing, move to camera class 
 #include "Math.h"
 
-//TODO move somewhere else
-#include "ModelLoader.h"
+//TODO move use of static model to a bucket system
+#include "StaticModel.h"
 
 //TODO wrap extensions and layers into configurable features?
 std::vector<const char*> const k_deviceExtensions{
@@ -46,9 +46,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_pipeline()
 	, m_graphicsQueue(nullptr)
 	, m_textOverlay()
-	, m_cube()
-	, m_modelVertexBuffer()
-	, m_modelIndexBuffer()
+	, m_pMeshPool(std::make_shared<MeshPool>())
+	, m_models()
 	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
 	, m_numFramesRendered(0)
 	, m_lightDescriptorPool(nullptr)
@@ -240,12 +239,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Todo move scene loading somewhere else
 	// good rust candidate?
-	Mesh pirate = ModelLoader::LoadModel("C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj");
-	m_modelVertexBuffer = m_pDevice->CreateBuffer(pirate.vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
-	m_modelIndexBuffer = m_pDevice->CreateBuffer(pirate.indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eIndexBuffer);
-
-	memcpy(m_modelVertexBuffer.m_pData, pirate.vertices.data(), m_modelVertexBuffer.m_dataSize);
-	memcpy(m_modelIndexBuffer.m_pData, pirate.indices.data(), m_modelIndexBuffer.m_dataSize);
+	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
+	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
 
 	//TODO move out
 	m_timingQueryPool = m_pDevice->CreateQueryPool(k_queryPoolCount);
@@ -302,24 +297,22 @@ void GfxEngine::Render()
 	vk::Rect2D const renderArea({ 0,0 }, m_swapChain.m_extent);
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
-	//Rotate model
-	glm::mat4 const model = glm::rotate(glm::identity<glm::mat4>(), glm::radians(m_numFramesRendered * 0.4f), glm::vec3(0.5f,0.5f, 0.0f));
-	glm::mat4 const mvp = m_camera.GetViewProj() * model;
+	//TODO move model translation to scene logic processing
+	m_models.at(0)->SetRotation(m_numFramesRendered * 0.4f, glm::vec3(0.5f, 0.5f, 0.0f));
+	m_models.at(1)->SetPosition(glm::vec3(-0.5, -0.5f, -0.5f));
 
 	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
 	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
-	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *m_modelVertexBuffer.m_buffer, { 0 } /*offset*/);
-	frame.commandBuffers[0].bindIndexBuffer(*m_modelIndexBuffer.m_buffer, 0/*offset*/, vk::IndexType::eUint32);
-	frame.commandBuffers[0].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipeline.layout, 0, *m_lightDescriptor, nullptr);
 
-	glm::mat4 model2 = glm::translate(glm::identity<glm::mat4>(), glm::vec3(-0.5, -0.5f, -0.5f));
-	//model2 = glm::scale(model2, glm::vec3(0.1f, 0.1f, 0.1f));
-	glm::mat4 const mvp2 = m_camera.GetViewProj() * model2;
-	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp2);
-	frame.commandBuffers[0].drawIndexed(m_modelIndexBuffer.m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
-
-	frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
-	frame.commandBuffers[0].drawIndexed(m_modelIndexBuffer.m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
+	for (StaticModelPtr_t const& model : m_models)
+	{
+		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *model->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
+		frame.commandBuffers[0].bindIndexBuffer(*model->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
+		frame.commandBuffers[0].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipeline.layout, 0, *m_lightDescriptor, nullptr);
+		glm::mat4 const mvp = m_camera.GetViewProj() * model->GetTransform();
+		frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
+		frame.commandBuffers[0].drawIndexed(model->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
+	}
 	
 	frame.commandBuffers[0].endRenderPass();
 

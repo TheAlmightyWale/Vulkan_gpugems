@@ -1,4 +1,5 @@
 #include "GfxPipelineBuilder.h"
+//TODO split out mesh and vertex defs
 #include "Mesh.h"
 
 vk::raii::Pipeline GfxPipelineBuilder::BuildPipeline(vk::raii::Device const& device, vk::RenderPass renderPass)

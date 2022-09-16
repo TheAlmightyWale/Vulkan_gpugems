@@ -5,10 +5,13 @@
 #include "lib/meshoptimizer/src/meshoptimizer.h"
 
 #include "Cube.h"
+#include "GfxDevice.h"
+#include "GfxBuffer.h"
 
-Mesh ModelLoader::LoadCube()
+MeshPtr_t ModelLoader::LoadCube(GfxDevicePtr_t const pDevice)
 {
-	Mesh cube;
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
 	for (uint32_t i = 0; i < k_cubeVertexValuesCount; i += 3)
 	{
 		Vertex v{};
@@ -20,19 +23,26 @@ Mesh ModelLoader::LoadCube()
 		v.ny = k_cubeNormals[i + 1];
 		v.nz = k_cubeNormals[i + 2];
 
-		cube.vertices.push_back(v);
+		vertices.push_back(v);
 	}
 
 	for (uint16_t index : k_cubeIndices)
 	{
-		cube.indices.push_back(index);
+		indices.push_back(index);
 	}
 
-	return cube;
+	MeshPtr_t pMesh = std::make_shared<Mesh>();
+	pMesh->vertexBuffer = pDevice->CreateBuffer(vertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
+	pMesh->indexBuffer = pDevice->CreateBuffer(indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eIndexBuffer);
+
+	memcpy(pMesh->vertexBuffer.m_pData, vertices.data(), pMesh->vertexBuffer.m_dataSize);
+	memcpy(pMesh->indexBuffer.m_pData, indices.data(), pMesh->indexBuffer.m_dataSize);
+
+	return pMesh;
 }
 
-//TODO don't copy mesh on return
-Mesh ModelLoader::LoadModel(std::string const& filePath)
+
+MeshPtr_t ModelLoader::LoadModel(GfxDevicePtr_t const pDevice, std::string const& filePath)
 {
 	ObjFile parsedObj;
 	if (!objParseFile(parsedObj, filePath.c_str()))
@@ -65,12 +75,20 @@ Mesh ModelLoader::LoadModel(std::string const& filePath)
 	std::vector<uint32_t> remap(indexCount);
 	size_t totalVertices = meshopt_generateVertexRemap(remap.data(), nullptr, indexCount, vertices.data(), indexCount, sizeof(Vertex));
 
-	Mesh mesh;
-	mesh.vertices.resize(totalVertices);
-	mesh.indices.resize(indexCount);
+	std::vector<Vertex> remappedVertices;
+	std::vector<uint32_t> indices;
+	remappedVertices.resize(totalVertices);
+	indices.resize(indexCount);
 
-	meshopt_remapVertexBuffer(mesh.vertices.data(), vertices.data(), indexCount, sizeof(Vertex), remap.data());
-	meshopt_remapIndexBuffer(mesh.indices.data(), nullptr, indexCount, remap.data());
+	meshopt_remapVertexBuffer(remappedVertices.data(), vertices.data(), indexCount, sizeof(Vertex), remap.data());
+	meshopt_remapIndexBuffer(indices.data(), nullptr, indexCount, remap.data());
 
-	return mesh;
+	MeshPtr_t pMesh = std::make_shared<Mesh>();
+	pMesh->vertexBuffer = pDevice->CreateBuffer(remappedVertices.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eVertexBuffer);
+	pMesh->indexBuffer = pDevice->CreateBuffer(indices.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eIndexBuffer);
+
+	memcpy(pMesh->vertexBuffer.m_pData, remappedVertices.data(), pMesh->vertexBuffer.m_dataSize);
+	memcpy(pMesh->indexBuffer.m_pData, indices.data(), pMesh->indexBuffer.m_dataSize);
+
+	return pMesh;
 }

@@ -4,6 +4,6 @@
 
 class ModelLoader {
 public:
-	static Mesh LoadModel(std::string const& filePath);
-	static Mesh LoadCube();
+	static MeshPtr_t LoadCube(GfxDevicePtr_t const pDevice);
+	static MeshPtr_t LoadModel(GfxDevicePtr_t const pDevice, std::string const& filePath);
 };
