@@ -8,6 +8,7 @@
 #include "StaticModel.h"
 #include "GfxBuffer.h"
 #include "GfxTextOverlay.h"
+#include "GfxDescriptorManager.h"
 #include "Camera.h"
 
 
@@ -64,9 +65,7 @@ private:
 
 	//TODO move out scene info
 	Camera m_camera;
-	vk::raii::DescriptorPool m_lightDescriptorPool;
-	vk::raii::DescriptorSetLayout m_lightDescriptorLayout;
-	vk::raii::DescriptorSet m_lightDescriptor;
+	GfxDescriptorManagerPtr_t m_pDescriptorManager;
 	GfxBuffer m_lightBuffer;
 
 	//Perf timers

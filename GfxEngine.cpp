@@ -50,9 +50,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_models()
 	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
 	, m_numFramesRendered(0)
-	, m_lightDescriptorPool(nullptr)
-	, m_lightDescriptorLayout(nullptr)
-	, m_lightDescriptor(nullptr)
+	, m_pDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
 	, m_samplers()
 {
@@ -67,6 +65,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	desiredProperties.apiVersion = k_vulkanVersion;
 
 	m_pDevice = std::make_shared<GfxDevice>(m_pInstance->GetInstance(), desiredFeatures, desiredProperties, k_deviceExtensions, k_deviceLayers);
+	m_pDescriptorManager = std::make_unique<GfxDescriptorManager>(m_pDevice, m_pDevice->GetProperties().limits.minUniformBufferOffsetAlignment);
 
 	//Load shaders
 	vk::raii::ShaderModule fragmentShader = LoadShaderModule("gooch.frag.spv");
@@ -176,30 +175,11 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	vk::PushConstantRange mvpMatrixPush(vk::ShaderStageFlagBits::eVertex, 0/*offset*/, sizeof(glm::mat4x4));
 
 	//Lights
-	vk::DescriptorSetLayoutBinding dslBinding(
-		k_lightBindingId /* binding Id*/,
-		vk::DescriptorType::eUniformBuffer,
-		1 /*descriptor count*/,
-		vk::ShaderStageFlagBits::eFragment,
-		nullptr
-	);
-
-	vk::DescriptorSetLayoutCreateInfo dslCreateInfo({}, dslBinding);
-	m_lightDescriptorLayout = vk::raii::DescriptorSetLayout(m_pDevice->GetDevice(), dslCreateInfo);
-	vk::DescriptorSetLayout lightLayout = *m_lightDescriptorLayout;
-	vk::DescriptorPoolSize poolSize(vk::DescriptorType::eUniformBuffer, 1);
-	vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo(
-		{},
-		1 /* max sets*/,
-		poolSize
-	);
-	m_lightDescriptorPool = vk::raii::DescriptorPool(m_pDevice->GetDevice(), descriptorPoolCreateInfo);
-	vk::DescriptorSetAllocateInfo lightDescriptorSet(*m_lightDescriptorPool, lightLayout);
-	m_lightDescriptor = std::move(m_pDevice->GetDevice().allocateDescriptorSets(lightDescriptorSet).front());
+	m_pDescriptorManager->SetUniformBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame);
 	m_lightBuffer = m_pDevice->CreateBuffer(sizeof(k_light), vk::BufferUsageFlagBits::eUniformBuffer);
 	vk::DescriptorBufferInfo lightBufferInfo(*m_lightBuffer.m_buffer, 0, m_lightBuffer.m_dataSize);
 	vk::WriteDescriptorSet writeDescriptor(
-		*m_lightDescriptor,
+		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
 		k_lightBindingId,
 		0 /*array element*/,
 		vk::DescriptorType::eUniformBuffer,
@@ -207,6 +187,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
 	memcpy(m_lightBuffer.m_pData, &k_light, m_lightBuffer.m_dataSize);
 
+	vk::DescriptorSetLayout lightLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
 	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), mvpMatrixPush, lightLayout);
 
 	GfxPipelineBuilder builder;
@@ -308,7 +289,12 @@ void GfxEngine::Render()
 	{
 		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *model->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
 		frame.commandBuffers[0].bindIndexBuffer(*model->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
-		frame.commandBuffers[0].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipeline.layout, 0, *m_lightDescriptor, nullptr);
+		frame.commandBuffers[0].bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			*m_pipeline.layout,
+			0,
+			m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
+			nullptr);
 		glm::mat4 const mvp = m_camera.GetViewProj() * model->GetTransform();
 		frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
 		frame.commandBuffers[0].drawIndexed(model->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);

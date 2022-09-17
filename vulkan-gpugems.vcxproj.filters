@@ -111,6 +111,9 @@
     <ClCompile Include="StaticModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="GfxDescriptorManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math.h">
@@ -180,6 +183,9 @@
       <Filter>Extern\ObjParser</Filter>
     </ClInclude>
     <ClInclude Include="StaticModel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GfxDescriptorManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -196,6 +196,7 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="GfxApiInstance.cpp" />
     <ClCompile Include="GfxBuffer.cpp" />
+    <ClCompile Include="GfxDescriptorManager.cpp" />
     <ClCompile Include="GfxDevice.cpp" />
     <ClCompile Include="GfxEngine.cpp" />
     <ClCompile Include="GfxPipelineBuilder.cpp" />
@@ -228,6 +229,7 @@
     <ClInclude Include="Exceptions.h" />
     <ClInclude Include="GfxApiInstance.h" />
     <ClInclude Include="GfxBuffer.h" />
+    <ClInclude Include="GfxDescriptorManager.h" />
     <ClInclude Include="GfxDevice.h" />
     <ClInclude Include="GfxEngine.h" />
     <ClInclude Include="GfxFrame.h" />
