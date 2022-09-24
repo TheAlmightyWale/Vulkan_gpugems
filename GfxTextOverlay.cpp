@@ -174,7 +174,8 @@ GfxTextOverlay::GfxTextOverlay(
 	);
 	descriptorPool = vk::raii::DescriptorPool(pDevice->GetDevice(), descriptorPoolCreateInfo);
 
-	vk::DescriptorSetLayoutBinding dslBinding(
+	vk::DescriptorSetLayoutBinding dslBinding
+	(
 		0 /*binding id*/,
 		vk::DescriptorType::eCombinedImageSampler,
 		vk::ShaderStageFlagBits::eFragment,

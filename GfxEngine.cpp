@@ -32,7 +32,8 @@ std::vector<glm::vec3> const k_lightDirection{
 
 glm::vec3 const k_light(0.0f, -2.0f, 0.0f);
 
-uint32_t const k_lightBindingId = 0;
+constexpr uint32_t k_lightBindingId = 0;
+constexpr uint32_t k_transformBindingId = 0;
 
 GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow)
 	: m_pInstance(nullptr)
@@ -49,6 +50,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_pMeshPool(std::make_shared<MeshPool>())
 	, m_models()
 	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
+	, m_lightBuffer()
+	, m_transformBuffer()
 	, m_numFramesRendered(0)
 	, m_pDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
@@ -65,7 +68,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	desiredProperties.apiVersion = k_vulkanVersion;
 
 	m_pDevice = std::make_shared<GfxDevice>(m_pInstance->GetInstance(), desiredFeatures, desiredProperties, k_deviceExtensions, k_deviceLayers);
-	m_pDescriptorManager = std::make_unique<GfxDescriptorManager>(m_pDevice, m_pDevice->GetProperties().limits.minUniformBufferOffsetAlignment);
+	m_pDescriptorManager = std::make_unique<GfxDescriptorManager>(m_pDevice);
 
 	//Load shaders
 	vk::raii::ShaderModule fragmentShader = LoadShaderModule("gooch.frag.spv");
@@ -171,11 +174,23 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		m_frames[i].renderCompleteFence = m_pDevice->CreateFence();
 	}
 
-	//Camera variables
-	vk::PushConstantRange mvpMatrixPush(vk::ShaderStageFlagBits::eVertex, 0/*offset*/, sizeof(glm::mat4x4));
+	//Model variables
+	SPDLOG_INFO("Loading Scene");
+
+	//Todo move scene loading somewhere else
+	// good rust candidate?
+	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
+	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
+
+
+	SPDLOG_INFO("Constructing descriptor sets");
+
+	m_pDescriptorManager->SetUniformBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, true /*bDynamic*/);
+	m_transformBuffer = m_pDevice->CreateBuffer(sizeof(m_models.at(0)->GetTransform()) * m_models.size(), vk::BufferUsageFlagBits::eUniformBuffer);
 
 	//Lights
-	m_pDescriptorManager->SetUniformBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame);
+	m_pDescriptorManager->SetUniformBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, false /*bDynamic*/);
+
 	m_lightBuffer = m_pDevice->CreateBuffer(sizeof(k_light), vk::BufferUsageFlagBits::eUniformBuffer);
 	vk::DescriptorBufferInfo lightBufferInfo(*m_lightBuffer.m_buffer, 0, m_lightBuffer.m_dataSize);
 	vk::WriteDescriptorSet writeDescriptor(
@@ -187,8 +202,12 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
 	memcpy(m_lightBuffer.m_pData, &k_light, m_lightBuffer.m_dataSize);
 
+	SPDLOG_INFO("Constructing Pipeline");
+	
 	vk::DescriptorSetLayout lightLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
-	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), mvpMatrixPush, lightLayout);
+	vk::DescriptorSetLayout transformLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerModel);
+	std::vector<vk::DescriptorSetLayout> layouts = { lightLayout, transformLayout};
+	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), nullptr, layouts);
 
 	GfxPipelineBuilder builder;
 	builder._shaderStages.push_back(
@@ -218,14 +237,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	m_pipeline.pipeline = builder.BuildPipeline(m_pDevice->GetDevice(), *m_renderPass);
 
-	//Todo move scene loading somewhere else
-	// good rust candidate?
-	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
-	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
-
 	//TODO move out
 	m_timingQueryPool = m_pDevice->CreateQueryPool(k_queryPoolCount);
-
 
 	//TODO move out
 	vk::raii::ShaderModule textVertShader = LoadShaderModule("text.vert.spv");
@@ -260,7 +273,21 @@ void GfxEngine::Render()
 	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod *1e+6; //timestamp period changes to ns e+6 takes us to ms
 	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod *1e+6;
 
+	//Upload Model transforms at the start of every frame
+	for (uint32_t i = 0; i < m_models.size(); ++i)
+	{
+		uint32_t singleBufferSize = m_transformBuffer.m_dataSize / m_models.size();
+		StaticModelPtr_t const& pModel = m_models.at(i);
+		//TODO move to shader and UBO uploads?
+		glm::mat4 const mvp = m_camera.GetViewProj() * pModel->GetTransform();
+		uint8_t* destination = static_cast<uint8_t*>(m_transformBuffer.m_pData) + (singleBufferSize * i);
+		memcpy(destination, &mvp, sizeof(mvp));
+	}
+
 	auto [result, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
+
+	//TODO remove after finished prototyping bindless
+	m_pDevice->GetDevice().waitIdle();
 
 	frame.commandPool.reset();
 	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
@@ -268,8 +295,6 @@ void GfxEngine::Render()
 
 	frame.commandBuffers[0].resetQueryPool(*m_timingQueryPool, 0, k_queryPoolCount);
 	frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, *m_timingQueryPool, 0);
-
-	//TODO wait on image transition manually as subpass dependencies don't seem to be waiting?
 
 	vk::ClearColorValue const k_clearColor(std::array<float, 4>{48.0f / 2550.f, 10.0f / 255.0f, 36.0f / 255.0f, 1.0f});
 	vk::ClearDepthStencilValue const k_depthClear(1.0f, 0); //1.0 is max depth
@@ -282,22 +307,51 @@ void GfxEngine::Render()
 	m_models.at(0)->SetRotation(m_numFramesRendered * 0.4f, glm::vec3(0.5f, 0.5f, 0.0f));
 	m_models.at(1)->SetPosition(glm::vec3(-0.5, -0.5f, -0.5f));
 
+	//Copy data to descriptor sets before binding
+	for (uint32_t i = 0; i < m_models.size(); ++i)
+	{
+		uint32_t singleBufferStride = m_transformBuffer.m_dataSize / m_models.size();
+		vk::DescriptorBufferInfo transformBufferInfo(*m_transformBuffer.m_buffer, 0, singleBufferStride);
+		vk::WriteDescriptorSet writeDescriptor(
+			m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
+			k_transformBindingId,
+			0 /*array element*/,
+			vk::DescriptorType::eUniformBufferDynamic, //TODO descriptor manager should give us the "location" details for a descriptor binding to write
+			nullptr, transformBufferInfo, nullptr);
+		m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
+	}
+
+	frame.commandBuffers[0].bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		*m_pipeline.layout,
+		0,
+		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
+		nullptr
+	);
+
 	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
 	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
 
-	for (StaticModelPtr_t const& model : m_models)
+	uint32_t descriptorSetOffsets[] = { 0 };
+
+	for (uint32_t i = 0; i < m_models.size(); ++i)
 	{
-		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *model->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
-		frame.commandBuffers[0].bindIndexBuffer(*model->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
+		uint32_t singleBufferSize = m_transformBuffer.m_dataSize / m_models.size();
+		descriptorSetOffsets[0] = singleBufferSize * i;
+
 		frame.commandBuffers[0].bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
 			*m_pipeline.layout,
-			0,
-			m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
-			nullptr);
-		glm::mat4 const mvp = m_camera.GetViewProj() * model->GetTransform();
-		frame.commandBuffers[0].pushConstants<glm::mat4>(*m_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, mvp);
-		frame.commandBuffers[0].drawIndexed(model->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
+			1,
+			m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
+			descriptorSetOffsets
+		);
+
+		StaticModelPtr_t const& pModel = m_models[i];
+		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
+		frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
+
+		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
 	}
 	
 	frame.commandBuffers[0].endRenderPass();

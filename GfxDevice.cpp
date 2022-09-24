@@ -8,6 +8,43 @@
 #include <bitset>
 
 
+template<typename T>
+constexpr auto SizeInBits(T a) { return sizeof(a) * 8; }
+
+size_t GetAlignedSize(size_t desiredSize, vk::BufferUsageFlagBits bufferType, vk::PhysicalDeviceProperties const& deviceProperties)
+{
+	size_t largestUsageAlignment = 0;
+
+	//Find the largest memory alignment that we need for our usage
+	//Go through all bits that are set and get the relevant minimum memory alignment
+	uint32_t bitIter = 1;
+	for (uint32_t i = 0; i < SizeInBits(bufferType); i++)
+	{
+		//TODO must be a better way to do this iteration and value look up, especially if we only actually care about 2 of them?
+		if ((bitIter & (uint32_t)bufferType) == bitIter)
+		{
+			switch (bitIter)
+			{
+			case (uint32_t)vk::BufferUsageFlagBits::eUniformBuffer:
+				largestUsageAlignment = std::max(deviceProperties.limits.minUniformBufferOffsetAlignment,largestUsageAlignment);
+				break;
+			case (uint32_t)vk::BufferUsageFlagBits::eStorageBuffer:
+				largestUsageAlignment = std::max(deviceProperties.limits.minStorageBufferOffsetAlignment, largestUsageAlignment);
+				break;
+			}
+		}
+		bitIter <<= 1;
+	}
+
+	//Calculate next largest alignment and return it
+	if (largestUsageAlignment > 0)
+	{
+		return (desiredSize + largestUsageAlignment - 1) & ~(largestUsageAlignment - 1);
+	}
+
+	return desiredSize;
+}
+
 uint32_t FindMemoryType(vk::PhysicalDeviceMemoryProperties const& memoryProperties, uint32_t requiredTypeBits, vk::MemoryPropertyFlags requiredProperties)
 {
 	uint32_t typeIndex = uint32_t(~0);
@@ -355,11 +392,14 @@ vk::raii::Fence GfxDevice::CreateFence()
 	return std::move(fence);
 }
 
-GfxBuffer GfxDevice::CreateBuffer(size_t size, vk::BufferUsageFlags flags)
+//CreateBuffer takes in the size of the data, but the actual buffer allocation may be larger due to alignment
+GfxBuffer GfxDevice::CreateBuffer(size_t dataSize, vk::BufferUsageFlagBits flags)
 {
+	size_t alignedSize = GetAlignedSize(dataSize, flags, GetProperties());
+
 	vk::BufferCreateInfo createInfo(
 		{},
-		size,
+		alignedSize,
 		flags,
 		vk::SharingMode::eExclusive
 	);
@@ -370,19 +410,19 @@ GfxBuffer GfxDevice::CreateBuffer(size_t size, vk::BufferUsageFlags flags)
 	vk::MemoryRequirements memoryRequirements = buffer.getMemoryRequirements();
 	uint32_t memoryTypeIndex = FindMemoryType(m_physcialDevice.getMemoryProperties(), memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-	uint32_t finalSize = size >= memoryRequirements.size ? size : memoryRequirements.size;
+	uint32_t finalSize = alignedSize >= memoryRequirements.size ? alignedSize : memoryRequirements.size;
 	vk::MemoryAllocateInfo allocateInfo(finalSize, memoryTypeIndex);
 
 	vk::raii::DeviceMemory memory = m_pDevice->allocateMemory(allocateInfo);
 	vk::BindBufferMemoryInfo bindInfo(*buffer, *memory, 0 /*offset*/);
 	m_pDevice->bindBufferMemory2(bindInfo);
 
-	void* pData = memory.mapMemory(0 /*offset*/, size, {} /*flags*/);
+	void* pData = memory.mapMemory(0 /*offset*/, alignedSize, {} /*flags*/);
 
 	GfxBuffer result;
 	result.m_buffer = std::move(buffer);
 	result.m_memory = std::move(memory);
-	result.m_dataSize = size;
+	result.m_dataSize = alignedSize;
 	result.m_pData = pData;
 
 	return std::move(result);

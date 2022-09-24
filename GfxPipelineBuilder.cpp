@@ -1,9 +1,12 @@
 #include "GfxPipelineBuilder.h"
 //TODO split out mesh and vertex defs
 #include "Mesh.h"
+#include "Logger.h"
 
 vk::raii::Pipeline GfxPipelineBuilder::BuildPipeline(vk::raii::Device const& device, vk::RenderPass renderPass)
 {
+    SPDLOG_INFO("Building Pipeline");
+
     vk::PipelineViewportStateCreateInfo viewportStateCreateInfo({}, _viewport, _scissor);
     vk::PipelineColorBlendStateCreateInfo colorBlending(
         {},

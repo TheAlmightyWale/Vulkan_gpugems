@@ -2,13 +2,13 @@
 #include "GfxDevice.h"
 #include "Logger.h"
 
-GfxDescriptorManager::GfxDescriptorManager(GfxDevicePtr_t pDevice, uint64_t minBufferAlignmentBytes)
+GfxDescriptorManager::GfxDescriptorManager(GfxDevicePtr_t pDevice)
 	: m_descriptorSlots()
 	, m_descriptorPool(nullptr)
 	, m_pGfxDevice(pDevice)
 {
 
-	SPDLOG_INFO("Initializing Descriptor Manager. Minimum GPU buffer alignment is: {0} bytes", minBufferAlignmentBytes);
+	SPDLOG_INFO("Initializing Descriptor Manager");
 
 	//TODO do some enum reflection so we can just iterate over a class rather than manually filling this out?
 	std::array<DataUsageFrequency, 2> usageFrequencies = {
@@ -17,23 +17,29 @@ GfxDescriptorManager::GfxDescriptorManager(GfxDevicePtr_t pDevice, uint64_t minB
 	};
 
 	//Just uniform buffers for now
-	vk::DescriptorPoolSize poolSize(vk::DescriptorType::eUniformBuffer, k_MaxDescriptorsToAllocate);
+	std::vector<vk::DescriptorPoolSize>poolSizes = {
+		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, k_MaxDescriptorsToAllocate),
+		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBufferDynamic, k_MaxDescriptorsToAllocate)
+	};
+
 	vk::DescriptorPoolCreateInfo poolCreateInfo(
 		{},
 		usageFrequencies.size(),
-		poolSize
+		poolSizes
 	);
 
 	m_descriptorPool = vk::raii::DescriptorPool(m_pGfxDevice->GetDevice(), poolCreateInfo);
 }
 
-void GfxDescriptorManager::SetUniformBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency)
+//TODO descriptorManager should be paired with a descriptor builder, which you add desired bindings before inputting that to a pipeline
+	// descriptorManager should probably just be interested in managing updates to descriptorSet information
+void GfxDescriptorManager::SetUniformBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, bool bDynamic)
 {
 	DescriptorInfo info;
 
 	vk::DescriptorSetLayoutBinding dslBinding(
 		bindingId,
-		vk::DescriptorType::eUniformBuffer,
+		bDynamic? vk::DescriptorType::eUniformBufferDynamic : vk::DescriptorType::eUniformBuffer,
 		1 /*assuming 1 descriptor, no arrays*/,
 		bindToStage,
 		nullptr
@@ -42,7 +48,7 @@ void GfxDescriptorManager::SetUniformBinding(uint32_t bindingId, vk::ShaderStage
 	//multiple bindings per descriptorSetLayout
 	vk::DescriptorSetLayoutCreateInfo dslCreateInfo({}, dslBinding);
 	info.layout = std::move(vk::raii::DescriptorSetLayout(m_pGfxDevice->GetDevice(), dslCreateInfo));
-	//Multiple layouts per set
+	//One layout per set, but we can allocate multiple sets at once
 	vk::DescriptorSetAllocateInfo dsaInfo(*m_descriptorPool, *info.layout);
 	info.set = std::move(m_pGfxDevice->GetDevice().allocateDescriptorSets(dsaInfo).front());
 	

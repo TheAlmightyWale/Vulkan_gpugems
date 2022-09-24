@@ -23,9 +23,9 @@ uint32_t const k_MaxDescriptorsToAllocate = 1000; /* arbitrary*/
 class GfxDescriptorManager
 {
 public:
-	GfxDescriptorManager(GfxDevicePtr_t pDevice, uint64_t minBufferAlignment);
+	GfxDescriptorManager(GfxDevicePtr_t pDevice);
 
-	void SetUniformBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency);
+	void SetUniformBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, bool bDynamic);
 
 	vk::DescriptorSet GetDescriptor(DataUsageFrequency usageFrequency) const;
 	vk::DescriptorSetLayout GetLayout(DataUsageFrequency usageFrequency) const;

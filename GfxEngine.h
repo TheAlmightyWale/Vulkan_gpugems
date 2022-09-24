@@ -67,6 +67,7 @@ private:
 	Camera m_camera;
 	GfxDescriptorManagerPtr_t m_pDescriptorManager;
 	GfxBuffer m_lightBuffer;
+	GfxBuffer m_transformBuffer;
 
 	//Perf timers
 	vk::raii::QueryPool m_timingQueryPool;

@@ -17,7 +17,7 @@ public:
 	GfxImage CreateDepthStencil(uint32_t width, uint32_t height, vk::Format depthFormat);
 	vk::raii::Semaphore CreateVkSemaphore();
 	vk::raii::Fence CreateFence();
-	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlags flags);
+	GfxBuffer CreateBuffer(size_t size, vk::BufferUsageFlagBits flags);
 	GfxImage CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectFlags aspect, vk::MemoryPropertyFlagBits desiredMemoryProperties);
 	vk::ImageMemoryBarrier CreateImageTransition(
 		vk::AccessFlagBits sourceAccess,
