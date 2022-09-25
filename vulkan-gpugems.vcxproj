@@ -201,6 +201,7 @@
     <ClCompile Include="GfxEngine.cpp" />
     <ClCompile Include="GfxPipelineBuilder.cpp" />
     <ClCompile Include="GfxTextOverlay.cpp" />
+    <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="lib\meshoptimizer\src\allocator.cpp" />
     <ClCompile Include="lib\meshoptimizer\src\clusterizer.cpp" />
     <ClCompile Include="lib\meshoptimizer\src\indexcodec.cpp" />
@@ -239,12 +240,14 @@
     <ClInclude Include="GfxPipelineBuilder.h" />
     <ClInclude Include="GfxSwapChain.h" />
     <ClInclude Include="GfxTextOverlay.h" />
+    <ClInclude Include="InputManager.h" />
     <ClInclude Include="lib\meshoptimizer\src\meshoptimizer.h" />
     <ClInclude Include="lib\objparser\objparser.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Math.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="ModelLoader.h" />
+    <ClInclude Include="ObjectDefinitions.h" />
     <ClInclude Include="StaticModel.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>
