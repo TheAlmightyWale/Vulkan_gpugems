@@ -93,7 +93,7 @@ union PhysicalDeviceFeaturesBitSet
 
 vk::raii::PhysicalDevice ChoosePhysicalDevice(
 	vk::raii::Instance const& pInstance,
-	vk::PhysicalDeviceFeatures const& desiredFeatures,
+	vk::PhysicalDeviceFeatures2 const& desiredFeatures,
 	vk::PhysicalDeviceProperties const& desiredProperties,
 	std::vector<char const*>const& desiredExtensionNames) {
 
@@ -111,7 +111,7 @@ vk::raii::PhysicalDevice ChoosePhysicalDevice(
 		PhysicalDeviceFeaturesBitSet featuresBits{};
 		featuresBits.feats = features;
 		PhysicalDeviceFeaturesBitSet desiredFeaturesBits{};
-		desiredFeaturesBits.feats = desiredFeatures;
+		desiredFeaturesBits.feats = desiredFeatures.features;
 		PhysicalDeviceFeaturesBitSet comparedFeatures{};
 		comparedFeatures.bits = featuresBits.bits & desiredFeaturesBits.bits;
 		bool bHasAllFeatures = comparedFeatures.feats == desiredFeaturesBits.feats;
@@ -156,14 +156,15 @@ uint32_t GetGraphicsQueueFamilyIndex(std::vector<vk::QueueFamilyProperties> cons
 	return static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), graphicsQueueFamilyProperty));
 }
 
-DevicePtr_t CreateLogicalDevice(vk::raii::PhysicalDevice const& physicalDevice, std::vector<char const*> enabledExtensions, std::vector<char const*> enabledLayers)
+DevicePtr_t CreateLogicalDevice(vk::raii::PhysicalDevice const& physicalDevice, std::vector<char const*> enabledExtensions, std::vector<char const*> enabledLayers, vk::PhysicalDeviceFeatures2 features)
 {
 	uint32_t graphicsQueueIndex = GetGraphicsQueueFamilyIndex(physicalDevice.getQueueFamilyProperties());
 	float queuePriority = 0.0f; //lowest priority for now
 	vk::DeviceQueueCreateInfo deviceQueueCreateInfo({} /*flags*/, graphicsQueueIndex, 1 /*queue count*/, &queuePriority);
 
-	auto features = physicalDevice.getFeatures();
-	vk::DeviceCreateInfo deviceCreateInfo( {} /*flags*/, deviceQueueCreateInfo, enabledLayers, enabledExtensions, & features);
+	//TODO just enabling everything right now. There are probably features we can disable which will give us better performance
+	features.setFeatures(physicalDevice.getFeatures());
+	vk::DeviceCreateInfo deviceCreateInfo( {} /*flags*/, deviceQueueCreateInfo, enabledLayers, enabledExtensions, nullptr, &features);
 
 	SPDLOG_INFO("Created logical device with enabled Extensions: {} enabled Layers {}", enabledExtensions, enabledLayers);
 	auto device = std::make_shared<vk::raii::Device>(physicalDevice, deviceCreateInfo);
@@ -174,12 +175,12 @@ DevicePtr_t CreateLogicalDevice(vk::raii::PhysicalDevice const& physicalDevice, 
 
 GfxDevice::GfxDevice(
 	vk::raii::Instance const& pInstance,
-	vk::PhysicalDeviceFeatures desiredFeatures,
+	vk::PhysicalDeviceFeatures2 desiredFeatures,
 	vk::PhysicalDeviceProperties desiredProperties,
 	std::vector<char const*> enabledExtensions,
 	std::vector<char const*> enabledLayers)
 	: m_physcialDevice(ChoosePhysicalDevice(pInstance, desiredFeatures, desiredProperties, enabledExtensions))
-	, m_pDevice(CreateLogicalDevice(m_physcialDevice, enabledExtensions, enabledLayers))
+	, m_pDevice(CreateLogicalDevice(m_physcialDevice, enabledExtensions, enabledLayers, desiredFeatures))
 	, m_graphcsQueueFamilyIndex(GetGraphicsQueueFamilyIndex(m_physcialDevice.getQueueFamilyProperties()))
 {
 }

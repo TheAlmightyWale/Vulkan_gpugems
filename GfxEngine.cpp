@@ -34,6 +34,7 @@ glm::vec3 const k_light(0.0f, -2.0f, 0.0f);
 
 constexpr uint32_t k_lightBindingId = 0;
 constexpr uint32_t k_transformBindingId = 0;
+constexpr uint32_t k_maxModelTransforms = 10000;
 
 GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow)
 	: m_pInstance(nullptr)
@@ -61,7 +62,10 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
 
 	//Create device
-	vk::PhysicalDeviceFeatures desiredFeatures;
+	vk::PhysicalDeviceFeatures2 desiredFeatures;
+	vk::PhysicalDeviceShaderDrawParametersFeatures shaderDrawParamsFeatures(VK_TRUE, nullptr);
+	desiredFeatures.setPNext(&shaderDrawParamsFeatures);
+
 	vk::PhysicalDeviceProperties desiredProperties;
 	desiredProperties.deviceType = vk::PhysicalDeviceType::eDiscreteGpu;
 	//desiredProperties.deviceType = vk::PhysicalDeviceType::eIntegratedGpu;
@@ -185,11 +189,11 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	SPDLOG_INFO("Constructing descriptor sets");
 
-	m_pDescriptorManager->SetUniformBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, true /*bDynamic*/);
-	m_transformBuffer = m_pDevice->CreateBuffer(sizeof(m_models.at(0)->GetTransform()) * m_models.size(), vk::BufferUsageFlagBits::eUniformBuffer);
+	m_pDescriptorManager->SetBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
+	m_transformBuffer = m_pDevice->CreateBuffer(sizeof(m_models.at(0)->GetTransform()) * k_maxModelTransforms, vk::BufferUsageFlagBits::eStorageBuffer);
 
 	//Lights
-	m_pDescriptorManager->SetUniformBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, false /*bDynamic*/);
+	m_pDescriptorManager->SetBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
 
 	m_lightBuffer = m_pDevice->CreateBuffer(sizeof(k_light), vk::BufferUsageFlagBits::eUniformBuffer);
 	vk::DescriptorBufferInfo lightBufferInfo(*m_lightBuffer.m_buffer, 0, m_lightBuffer.m_dataSize);
@@ -270,15 +274,15 @@ void GfxEngine::Render()
 		sizeof(uint64_t),
 		vk::QueryResultFlagBits::e64);
 
-	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod *1e+6; //timestamp period changes to ns e+6 takes us to ms
-	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod *1e+6;
+	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6; //timestamp period changes to ns e+6 takes us to ms
+	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6;
 
 	//Upload Model transforms at the start of every frame
 	for (uint32_t i = 0; i < m_models.size(); ++i)
 	{
-		uint32_t singleBufferSize = m_transformBuffer.m_dataSize / m_models.size();
+		uint32_t singleBufferSize = sizeof(ObjectData);
 		StaticModelPtr_t const& pModel = m_models.at(i);
-		//TODO move to shader and UBO uploads?
+		//TODO move camera info and this multiplication to shader and UBO uploads?
 		glm::mat4 const mvp = m_camera.GetViewProj() * pModel->GetTransform();
 		uint8_t* destination = static_cast<uint8_t*>(m_transformBuffer.m_pData) + (singleBufferSize * i);
 		memcpy(destination, &mvp, sizeof(mvp));
@@ -316,7 +320,7 @@ void GfxEngine::Render()
 			m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
 			k_transformBindingId,
 			0 /*array element*/,
-			vk::DescriptorType::eUniformBufferDynamic, //TODO descriptor manager should give us the "location" details for a descriptor binding to write
+			vk::DescriptorType::eStorageBuffer, //TODO descriptor manager should give us the "location" details for a descriptor binding to write
 			nullptr, transformBufferInfo, nullptr);
 		m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
 	}
@@ -325,33 +329,19 @@ void GfxEngine::Render()
 		vk::PipelineBindPoint::eGraphics,
 		*m_pipeline.layout,
 		0,
-		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
+		{m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame), m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel)}, //Bind per model here as we are going bindless
 		nullptr
 	);
 
 	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
 	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
 
-	uint32_t descriptorSetOffsets[] = { 0 };
-
 	for (uint32_t i = 0; i < m_models.size(); ++i)
 	{
-		uint32_t singleBufferSize = m_transformBuffer.m_dataSize / m_models.size();
-		descriptorSetOffsets[0] = singleBufferSize * i;
-
-		frame.commandBuffers[0].bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			*m_pipeline.layout,
-			1,
-			m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
-			descriptorSetOffsets
-		);
-
 		StaticModelPtr_t const& pModel = m_models[i];
 		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
 		frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
-
-		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, 0);
+		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, i /*first instance*/);
 	}
 	
 	frame.commandBuffers[0].endRenderPass();

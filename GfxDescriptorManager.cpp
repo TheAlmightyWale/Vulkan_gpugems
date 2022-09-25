@@ -19,7 +19,8 @@ GfxDescriptorManager::GfxDescriptorManager(GfxDevicePtr_t pDevice)
 	//Just uniform buffers for now
 	std::vector<vk::DescriptorPoolSize>poolSizes = {
 		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, k_MaxDescriptorsToAllocate),
-		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBufferDynamic, k_MaxDescriptorsToAllocate)
+		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBufferDynamic, k_MaxDescriptorsToAllocate),
+		vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, k_MaxDescriptorsToAllocate)
 	};
 
 	vk::DescriptorPoolCreateInfo poolCreateInfo(
@@ -32,14 +33,14 @@ GfxDescriptorManager::GfxDescriptorManager(GfxDevicePtr_t pDevice)
 }
 
 //TODO descriptorManager should be paired with a descriptor builder, which you add desired bindings before inputting that to a pipeline
-	// descriptorManager should probably just be interested in managing updates to descriptorSet information
-void GfxDescriptorManager::SetUniformBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, bool bDynamic)
+	// descriptorManager should probably just be interested in managing updates to descriptorSet information, such as getting locations of certain bindings etc
+void GfxDescriptorManager::SetBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, vk::DescriptorType type)
 {
 	DescriptorInfo info;
 
 	vk::DescriptorSetLayoutBinding dslBinding(
 		bindingId,
-		bDynamic? vk::DescriptorType::eUniformBufferDynamic : vk::DescriptorType::eUniformBuffer,
+		type,
 		1 /*assuming 1 descriptor, no arrays*/,
 		bindToStage,
 		nullptr

@@ -3,6 +3,11 @@
 #include "Mesh.h"
 #include "GfxBuffer.h"
 
+struct ObjectData
+{
+	glm::mat4 transform;
+};
+
 class StaticModel {
 public:
 	StaticModel(GfxDevicePtr_t const pDevice, MeshPoolPtr_t meshPool, std::string const& modelFilePath);
@@ -18,7 +23,7 @@ public:
 
 private:
 	MeshPtr_t m_pMesh;
-	glm::mat4 m_transform;
+	ObjectData m_transform;
 };
 
 using StaticModelPtr_t = std::shared_ptr<StaticModel>;

@@ -5,7 +5,7 @@ class GfxDevice
 {
 public:
 	GfxDevice(vk::raii::Instance const& pInstance,
-		vk::PhysicalDeviceFeatures desiredFeatures,
+		vk::PhysicalDeviceFeatures2 desiredFeatures,
 		vk::PhysicalDeviceProperties desiredProperties,
 		std::vector<char const*> enabledExtensions,
 		std::vector<char const*> enabledLayers);

@@ -16,7 +16,7 @@ struct DescriptorInfo {
 
 using DescriptorSlotMap = std::unordered_map<DataUsageFrequency, DescriptorInfo>;
 
-uint32_t const k_MaxDescriptorsToAllocate = 1000; /* arbitrary*/
+constexpr uint32_t k_MaxDescriptorsToAllocate = 100; /* arbitrary*/
 
 //Descriptor manager holds the descriptor pools for the engine as well as a set of pre-defined descriptorSets
 // which other components can specify they want to add things to
@@ -25,7 +25,7 @@ class GfxDescriptorManager
 public:
 	GfxDescriptorManager(GfxDevicePtr_t pDevice);
 
-	void SetUniformBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, bool bDynamic);
+	void SetBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, vk::DescriptorType type);
 
 	vk::DescriptorSet GetDescriptor(DataUsageFrequency usageFrequency) const;
 	vk::DescriptorSetLayout GetLayout(DataUsageFrequency usageFrequency) const;

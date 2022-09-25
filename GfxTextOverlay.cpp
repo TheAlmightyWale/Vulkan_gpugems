@@ -5,6 +5,7 @@
 #include "Mesh.h"
 #include "Math.h"
 #include "Exceptions.h"
+#include "Logger.h"
 
 GfxTextOverlay::GfxTextOverlay()
 	: overlayPipeline(nullptr)
@@ -39,6 +40,8 @@ GfxTextOverlay::GfxTextOverlay(
 	, overlayVertexBuffer()
 	, overlayFrameBuffers({nullptr, nullptr})
 {
+	SPDLOG_INFO("Creating Text Overlay");
+
 	//Load font
 	uint32_t const k_fontWidth = STB_FONT_consolas_24_latin1_BITMAP_WIDTH;
 	uint32_t const k_fontHeight = STB_FONT_consolas_24_latin1_BITMAP_WIDTH;
