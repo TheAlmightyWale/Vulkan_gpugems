@@ -2,8 +2,9 @@
 #include "GfxDevice.h"
 #include "ModelLoader.h"
 
-StaticModel::StaticModel(GfxDevicePtr_t const pDevice, MeshPoolPtr_t meshPool, std::string const& modelFilePath)
-	: m_transform()
+//TODO this gets waay cleaner with ECS or other component management so we don't have to talk to object processor directly
+StaticModel::StaticModel(GfxDevicePtr_t const pDevice, MeshPoolPtr_t meshPool, std::string const& modelFilePath, ObjectProcessorPtr_t pObjectProcessor)
+	: m_transform(pObjectProcessor->AddStaticMesh(ObjectData{glm::identity<glm::mat4>()}))
 {
 	if (!meshPool->contains(modelFilePath))
 	{
@@ -11,8 +12,6 @@ StaticModel::StaticModel(GfxDevicePtr_t const pDevice, MeshPoolPtr_t meshPool, s
 		meshPool->emplace(modelFilePath, pMesh);
 	}
 	m_pMesh = meshPool->at(modelFilePath);
-
-	m_transform.transform = glm::identity<glm::mat4>();
 }
 
 void StaticModel::SetPosition(glm::vec3 const& position)

@@ -3,6 +3,7 @@
 #include "GfxFwdDecl.h"
 
 class InputManager;
+class ObjectProcessor;
 
 //App is responsible for managing window lifetimes and the main event loop
 class App
@@ -21,5 +22,6 @@ private:
 	std::string const m_appName;
 	std::shared_ptr<GfxEngine> m_pGfxEngine;
 	std::shared_ptr<InputManager> m_pInputManager;
+	std::shared_ptr<ObjectProcessor> m_pObjectProcessor;
 };
 

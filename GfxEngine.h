@@ -11,6 +11,8 @@
 #include "GfxDescriptorManager.h"
 #include "Camera.h"
 
+//TODO move out object managment to scene loading
+#include "ObjectProcessor.h"
 
 std::string const k_engineName = "Vulkan?";
 uint32_t const k_engineVersion = 1;
@@ -21,7 +23,7 @@ uint32_t const k_queryPoolCount = 64;
 class GfxEngine
 {
 public:
-	GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow);
+	GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow, std::shared_ptr<ObjectProcessor> objectProcessor);
 	~GfxEngine();
 
 	GfxEngine(GfxEngine const&) = delete;
@@ -64,10 +66,11 @@ private:
 	uint64_t m_numFramesRendered;
 
 	//TODO move out scene info
-	Camera m_camera;
+	std::shared_ptr<Camera> m_pCamera;
 	GfxDescriptorManagerPtr_t m_pDescriptorManager;
 	GfxBuffer m_lightBuffer;
 	GfxBuffer m_transformBuffer;
+	std::shared_ptr<ObjectProcessor> m_pObjectProcessor;
 
 	//Perf timers
 	vk::raii::QueryPool m_timingQueryPool;
