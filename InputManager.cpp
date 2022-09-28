@@ -1,17 +1,15 @@
 #include "InputManager.h"
 #include "Exceptions.h"
 
-void ProcessButtonState(int glfwButtonAction, ButtonState* const processedState)
+void ProcessButtonState(int glfwButtonAction, ButtonState& const processedState) noexcept
 {
-	ButtonState state;
-
 	if (glfwButtonAction == GLFW_PRESS)
 	{
-		processedState->isPressed = true;
+		processedState.isPressed = true;
 	}
 	else if (glfwButtonAction == GLFW_RELEASE)
 	{
-		processedState->isPressed = false;
+		processedState.isPressed = false;
 	}
 }
 
@@ -21,16 +19,16 @@ void InputManager::HandleKeyEvent(int key, int action) noexcept
 	switch (key)
 	{
 	case GLFW_KEY_W:
-		ProcessButtonState(action, &inputState.MoveUp);
+		ProcessButtonState(action, inputState.MoveUp);
 		break;
 	case GLFW_KEY_A:
-		ProcessButtonState(action, &inputState.MoveLeft);
+		ProcessButtonState(action, inputState.MoveLeft);
 		break;
 	case GLFW_KEY_S:
-		ProcessButtonState(action, &inputState.MoveDown);
+		ProcessButtonState(action, inputState.MoveDown);
 		break;
 	case GLFW_KEY_D:
-		ProcessButtonState(action, &inputState.MoveRight);
+		ProcessButtonState(action, inputState.MoveRight);
 		break;
 	default:
 		break;

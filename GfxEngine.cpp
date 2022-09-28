@@ -34,9 +34,8 @@ glm::vec3 const k_light(0.0f, -2.0f, 0.0f);
 
 constexpr uint32_t k_lightBindingId = 0;
 constexpr uint32_t k_transformBindingId = 0;
-constexpr uint32_t k_maxModelTransforms = 10000;
 
-GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow)
+GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow, std::shared_ptr<ObjectProcessor> pObjectProcessor)
 	: m_pInstance(nullptr)
 	, m_pWindow(pWindow)
 	, m_pDevice(nullptr)
@@ -50,14 +49,17 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_textOverlay()
 	, m_pMeshPool(std::make_shared<MeshPool>())
 	, m_models()
-	, m_camera(pWindow->GetWindowWidth(), pWindow->GetWindowHeight())
+	, m_pCamera(std::make_shared<Camera>(pWindow->GetWindowWidth(), pWindow->GetWindowHeight()))
 	, m_lightBuffer()
 	, m_transformBuffer()
 	, m_numFramesRendered(0)
 	, m_pDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
 	, m_samplers()
+	, m_pObjectProcessor(pObjectProcessor)
 {
+	//TODO remove evnetually
+	m_pObjectProcessor->SetCamera(m_pCamera);
 
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
 
@@ -183,9 +185,17 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Todo move scene loading somewhere else
 	// good rust candidate?
-	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
-	m_models.emplace_back(std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj"));
+	uint32_t const k_modelCount = 8;
+	for (uint32_t i = 0; i < k_modelCount; ++i)
+	{
+		auto pModel = std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj", m_pObjectProcessor);
+		m_models.emplace_back(pModel);
 
+		//place meshes in a gently rising grid
+		float const k_modelSpacing = 2.0f;
+		glm::vec3 position(i % 3 * k_modelSpacing, i * k_modelSpacing * 0.5f, i % 3 * k_modelSpacing);
+		pModel->SetPosition(position);
+	}
 
 	SPDLOG_INFO("Constructing descriptor sets");
 
@@ -207,10 +217,10 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	memcpy(m_lightBuffer.m_pData, &k_light, m_lightBuffer.m_dataSize);
 
 	SPDLOG_INFO("Constructing Pipeline");
-	
+
 	vk::DescriptorSetLayout lightLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
 	vk::DescriptorSetLayout transformLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerModel);
-	std::vector<vk::DescriptorSetLayout> layouts = { lightLayout, transformLayout};
+	std::vector<vk::DescriptorSetLayout> layouts = { lightLayout, transformLayout };
 	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), nullptr, layouts);
 
 	GfxPipelineBuilder builder;
@@ -229,7 +239,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	builder._viewport.setMinDepth(0.0f);
 	builder._viewport.setMaxDepth(1.0f);
 
-	builder._scissor.setOffset({ 0, 0 }); 
+	builder._scissor.setOffset({ 0, 0 });
 	builder._scissor.setExtent({ width, height });
 
 	builder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone);
@@ -283,7 +293,7 @@ void GfxEngine::Render()
 		uint32_t singleBufferSize = sizeof(ObjectData);
 		StaticModelPtr_t const& pModel = m_models.at(i);
 		//TODO move camera info and this multiplication to shader and UBO uploads?
-		glm::mat4 const mvp = m_camera.GetViewProj() * pModel->GetTransform();
+		glm::mat4 const mvp = m_pCamera->GetViewProj() * pModel->GetTransform();
 		uint8_t* destination = static_cast<uint8_t*>(m_transformBuffer.m_pData) + (singleBufferSize * i);
 		memcpy(destination, &mvp, sizeof(mvp));
 	}
@@ -307,29 +317,22 @@ void GfxEngine::Render()
 	vk::Rect2D const renderArea({ 0,0 }, m_swapChain.m_extent);
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
-	//TODO move model translation to scene logic processing
-	m_models.at(0)->SetRotation(m_numFramesRendered * 0.4f, glm::vec3(0.5f, 0.5f, 0.0f));
-	m_models.at(1)->SetPosition(glm::vec3(-0.5, -0.5f, -0.5f));
-
 	//Copy data to descriptor sets before binding
-	for (uint32_t i = 0; i < m_models.size(); ++i)
-	{
-		uint32_t singleBufferStride = m_transformBuffer.m_dataSize / m_models.size();
-		vk::DescriptorBufferInfo transformBufferInfo(*m_transformBuffer.m_buffer, 0, singleBufferStride);
-		vk::WriteDescriptorSet writeDescriptor(
-			m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
-			k_transformBindingId,
-			0 /*array element*/,
-			vk::DescriptorType::eStorageBuffer, //TODO descriptor manager should give us the "location" details for a descriptor binding to write
-			nullptr, transformBufferInfo, nullptr);
-		m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
-	}
+	uint32_t singleBufferStride = sizeof(ObjectData);
+	vk::DescriptorBufferInfo transformBufferInfo(*m_transformBuffer.m_buffer, 0, singleBufferStride * m_models.size());
+	vk::WriteDescriptorSet writeDescriptor(
+		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
+		k_transformBindingId,
+		0 /*array element*/,
+		vk::DescriptorType::eStorageBuffer, //TODO descriptor manager should give us the "location" details for a descriptor binding to write
+		nullptr, transformBufferInfo, nullptr);
+	m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
 
 	frame.commandBuffers[0].bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		*m_pipeline.layout,
 		0,
-		{m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame), m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel)}, //Bind per model here as we are going bindless
+		{ m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame), m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel) }, //Bind per model here as we are going bindless
 		nullptr
 	);
 
@@ -343,7 +346,7 @@ void GfxEngine::Render()
 		frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
 		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, i /*first instance*/);
 	}
-	
+
 	frame.commandBuffers[0].endRenderPass();
 
 	frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 1);
