@@ -46,7 +46,7 @@ void ObjectProcessor::ProcessObjects(float deltaTime)
 		// Each mesh rotates based on it's index
 		constexpr float k_rotationDegreesPerSecond = 30.0f;
 		size_t index = i % k_rotationPermutations.size();
-		if (index != 0) { //special case where we do not rotate otherwise would be rotating by zero-axis
+		if (index != 0) { //special case where we do not rotate, otherwise would be rotating by zero-axis
 			transform = glm::rotate(transform, glm::radians(k_rotationDegreesPerSecond * deltaTime), k_rotationPermutations.at(i % k_rotationPermutations.size()));
 		}
 	}

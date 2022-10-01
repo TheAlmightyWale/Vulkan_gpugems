@@ -26,11 +26,7 @@ std::vector<const char*> const k_deviceLayers{
 	//Deprecated, but might be needed for backwards compatibility if we ever want it
 };
 
-std::vector<glm::vec3> const k_lightDirection{
-	glm::vec3(0.0f, -2.0f, 0.0f)
-};
-
-glm::vec3 const k_light(0.0f, -2.0f, 0.0f);
+glm::vec3 const k_light(-1.0f, 0.0f, -8.0f);
 
 constexpr uint32_t k_lightBindingId = 0;
 constexpr uint32_t k_transformBindingId = 0;
@@ -51,7 +47,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_models()
 	, m_pCamera(std::make_shared<Camera>(pWindow->GetWindowWidth(), pWindow->GetWindowHeight()))
 	, m_lightBuffer()
-	, m_transformBuffer()
+	, m_objectDataBuffer()
 	, m_numFramesRendered(0)
 	, m_pDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
@@ -200,7 +196,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	SPDLOG_INFO("Constructing descriptor sets");
 
 	m_pDescriptorManager->SetBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
-	m_transformBuffer = m_pDevice->CreateBuffer(sizeof(m_models.at(0)->GetTransform()) * k_maxModelTransforms, vk::BufferUsageFlagBits::eStorageBuffer);
+	constexpr size_t k_objectDataBufferSize = sizeof(ObjectData) * k_maxModelTransforms + sizeof(CameraShaderData);//Only taking one camera into account
+	m_objectDataBuffer = m_pDevice->CreateBuffer(k_objectDataBufferSize, vk::BufferUsageFlagBits::eStorageBuffer);
 
 	//Lights
 	m_pDescriptorManager->SetBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
@@ -287,16 +284,8 @@ void GfxEngine::Render()
 	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6; //timestamp period changes to ns e+6 takes us to ms
 	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6;
 
-	//Upload Model transforms at the start of every frame
-	for (uint32_t i = 0; i < m_models.size(); ++i)
-	{
-		uint32_t singleBufferSize = sizeof(ObjectData);
-		StaticModelPtr_t const& pModel = m_models.at(i);
-		//TODO move camera info and this multiplication to shader and UBO uploads?
-		glm::mat4 const mvp = m_pCamera->GetViewProj() * pModel->GetTransform();
-		uint8_t* destination = static_cast<uint8_t*>(m_transformBuffer.m_pData) + (singleBufferSize * i);
-		memcpy(destination, &mvp, sizeof(mvp));
-	}
+	
+	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload();
 
 	auto [result, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
 
@@ -318,8 +307,7 @@ void GfxEngine::Render()
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
 	//Copy data to descriptor sets before binding
-	uint32_t singleBufferStride = sizeof(ObjectData);
-	vk::DescriptorBufferInfo transformBufferInfo(*m_transformBuffer.m_buffer, 0, singleBufferStride * m_models.size());
+	vk::DescriptorBufferInfo transformBufferInfo(*m_objectDataBuffer.m_buffer, 0, totalObjectDataBytesToUpload);
 	vk::WriteDescriptorSet writeDescriptor(
 		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
 		k_transformBindingId,
@@ -404,4 +392,24 @@ vk::raii::ShaderModule GfxEngine::LoadShaderModule(std::string const& filePath)
 GfxFrame& GfxEngine::GetCurrentFrame()
 {
 	return m_frames[m_numFramesRendered % k_numFramesBuffered];
+}
+
+size_t GfxEngine::PrepObjectDataForUpload()
+{
+	//First upload Camera data
+	uint8_t* pDestination = static_cast<uint8_t*>(m_objectDataBuffer.m_pData);
+	uint32_t cameraDataSize = sizeof(CameraShaderData);
+	memcpy(pDestination, &m_pCamera->GetViewProj(), cameraDataSize);
+	pDestination += cameraDataSize;
+
+	//Upload Model transforms at the start of every frame
+	for (uint32_t i = 0; i < m_models.size(); ++i)
+	{
+		uint32_t singleBufferSize = sizeof(ObjectData);
+		memcpy(pDestination, &m_models.at(i)->GetTransform(), singleBufferSize);
+		pDestination += singleBufferSize;
+	}
+
+	size_t bytesCopied = pDestination - static_cast<uint8_t*>(m_objectDataBuffer.m_pData);
+	return bytesCopied;
 }

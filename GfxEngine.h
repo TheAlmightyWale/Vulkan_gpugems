@@ -36,6 +36,7 @@ public:
 
 protected:
 	GfxFrame& GetCurrentFrame();
+	size_t PrepObjectDataForUpload();
 
 private:
 
@@ -69,7 +70,7 @@ private:
 	std::shared_ptr<Camera> m_pCamera;
 	GfxDescriptorManagerPtr_t m_pDescriptorManager;
 	GfxBuffer m_lightBuffer;
-	GfxBuffer m_transformBuffer;
+	GfxBuffer m_objectDataBuffer;
 	std::shared_ptr<ObjectProcessor> m_pObjectProcessor;
 
 	//Perf timers

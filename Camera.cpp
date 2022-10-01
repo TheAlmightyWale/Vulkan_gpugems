@@ -1,7 +1,7 @@
 #include "Camera.h"
 #include "InputManager.h"
 
-float const k_cameraMoveSpeed = 1.0f;
+constexpr float k_cameraMoveSpeed = 1.0f;
 
 Camera::Camera(uint32_t screenWidth, uint32_t screenHeight)
 {
@@ -12,7 +12,7 @@ Camera::Camera(uint32_t screenWidth, uint32_t screenHeight)
 
 	float const aspectRatio = (float)screenWidth / (float)screenHeight;
 	m_proj = glm::perspective(glm::radians(70.0f), aspectRatio, 0.1f, 100.0f);
-	m_vp = m_proj * glm::lookAt(m_position, m_target, m_up);
+	m_cameraShaderData.viewProj = m_proj * glm::lookAt(m_position, m_target, m_up);
 }
 
 void Camera::Process(ControllerInput const& inputState, float deltaTime)
@@ -38,10 +38,10 @@ void Camera::Process(ControllerInput const& inputState, float deltaTime)
 	m_position += movement;
 	//TODO update target as we move? Could also just have camera circle around the center point?
 
-	m_vp = m_proj * glm::lookAt(m_position, m_target, m_up);
+	m_cameraShaderData.viewProj = m_proj * glm::lookAt(m_position, m_target, m_up);
 }
 
 glm::mat4 const& Camera::GetViewProj() const noexcept
 {
-	return m_vp;
+	return m_cameraShaderData.viewProj;
 }

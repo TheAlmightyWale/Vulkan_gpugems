@@ -3,6 +3,11 @@
 
 struct ControllerInput;
 
+struct CameraShaderData
+{
+	glm::mat4 viewProj;
+};
+
 class Camera
 {
 public:
@@ -18,5 +23,5 @@ private:
 	glm::vec3 m_position;
 	glm::vec3 m_up;
 	glm::mat4 m_proj;
-	glm::mat4 m_vp;
+	CameraShaderData m_cameraShaderData;
 };
