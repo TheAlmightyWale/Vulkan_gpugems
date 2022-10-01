@@ -6,9 +6,9 @@ float const k_cameraMoveSpeed = 1.0f;
 Camera::Camera(uint32_t screenWidth, uint32_t screenHeight)
 {
     //hardcoded camera for now
-	m_position = { 0.0f, 3.0f, -2.0f };
+	m_position = { 2.0f, 4.0f, -6.0f };
 	m_up = { 0.0f, 1.0f, 0.0f };
-	m_target = { 0.0f, 0.0f, 0.0f };
+	m_target = { 1.0f, 4.0f, 2.0f };
 
 	float const aspectRatio = (float)screenWidth / (float)screenHeight;
 	m_proj = glm::perspective(glm::radians(70.0f), aspectRatio, 0.1f, 100.0f);

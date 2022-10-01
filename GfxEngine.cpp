@@ -58,7 +58,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_samplers()
 	, m_pObjectProcessor(pObjectProcessor)
 {
-	//TODO remove evnetually
+	//TODO remove eventually when we have a scene loader
 	m_pObjectProcessor->SetCamera(m_pCamera);
 
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
