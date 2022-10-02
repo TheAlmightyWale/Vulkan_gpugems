@@ -36,11 +36,13 @@ public:
 
 protected:
 	GfxFrame& GetCurrentFrame();
-	size_t PrepObjectDataForUpload();
 
-private:
+	size_t PrepObjectDataForUpload();
+	void UploadObjectDataToGpu();
 
 	vk::raii::ShaderModule LoadShaderModule(std::string const& filePath);
+
+private:
 
 	WindowPtr_t m_pWindow;
 	std::shared_ptr<GfxApiInstance> m_pInstance;

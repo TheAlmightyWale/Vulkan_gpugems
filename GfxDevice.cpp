@@ -471,3 +471,17 @@ vk::raii::CommandBuffers GfxDevice::CreateCommandBuffers(vk::CommandPool command
 	vk::CommandBufferAllocateInfo allocateInfo(commandPool, vk::CommandBufferLevel::ePrimary, numBuffers);
 	return std::move(vk::raii::CommandBuffers(*m_pDevice.get(), allocateInfo));
 }
+
+void GfxDevice::UploadBufferData(size_t bytesToUpload, size_t bufferOffset, vk::Buffer copyFromBuffer, vk::DescriptorSet descriptorSet, uint32_t bindingId, vk::DescriptorType type)
+{
+	vk::DescriptorBufferInfo copyBufferInfo(copyFromBuffer, bufferOffset, bytesToUpload);
+	vk::WriteDescriptorSet writeDescriptor(
+		descriptorSet,
+		bindingId,
+		0,
+		type,
+		nullptr, copyBufferInfo, nullptr,
+		nullptr
+	);
+	m_pDevice->updateDescriptorSets(writeDescriptor, nullptr);
+}

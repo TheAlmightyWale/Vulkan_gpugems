@@ -284,9 +284,6 @@ void GfxEngine::Render()
 	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6; //timestamp period changes to ns e+6 takes us to ms
 	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6;
 
-	
-	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload();
-
 	auto [result, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
 
 	//TODO remove after finished prototyping bindless
@@ -306,15 +303,8 @@ void GfxEngine::Render()
 	vk::Rect2D const renderArea({ 0,0 }, m_swapChain.m_extent);
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
-	//Copy data to descriptor sets before binding
-	vk::DescriptorBufferInfo transformBufferInfo(*m_objectDataBuffer.m_buffer, 0, totalObjectDataBytesToUpload);
-	vk::WriteDescriptorSet writeDescriptor(
-		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
-		k_transformBindingId,
-		0 /*array element*/,
-		vk::DescriptorType::eStorageBuffer, //TODO descriptor manager should give us the "location" details for a descriptor binding to write
-		nullptr, transformBufferInfo, nullptr);
-	m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
+	//Copy data to gpu before binding descriptor set
+	UploadObjectDataToGpu();
 
 	frame.commandBuffers[0].bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
@@ -397,19 +387,23 @@ GfxFrame& GfxEngine::GetCurrentFrame()
 size_t GfxEngine::PrepObjectDataForUpload()
 {
 	//First upload Camera data
-	uint8_t* pDestination = static_cast<uint8_t*>(m_objectDataBuffer.m_pData);
-	uint32_t cameraDataSize = sizeof(CameraShaderData);
-	memcpy(pDestination, &m_pCamera->GetViewProj(), cameraDataSize);
-	pDestination += cameraDataSize;
+	size_t writeOffset = m_objectDataBuffer.CopyToBuffer(&m_pCamera->GetViewProj(), sizeof(CameraShaderData), 0);
 
 	//Upload Model transforms at the start of every frame
 	for (uint32_t i = 0; i < m_models.size(); ++i)
 	{
-		uint32_t singleBufferSize = sizeof(ObjectData);
-		memcpy(pDestination, &m_models.at(i)->GetTransform(), singleBufferSize);
-		pDestination += singleBufferSize;
+		//TODO exoise ObjectData contiguous store somehow, so we don't need to iterate through poiunter redirectes
+		writeOffset = m_objectDataBuffer.CopyToBuffer(&m_models.at(i)->GetTransform(), sizeof(ObjectData), writeOffset);
 	}
 
-	size_t bytesCopied = pDestination - static_cast<uint8_t*>(m_objectDataBuffer.m_pData);
-	return bytesCopied;
+	//TODO Currently have no way of knowing where the starting offset of copyToBuffer is
+	// which will be needed once this buffer copy gets shared between more than just this function
+	return writeOffset;
+}
+
+void GfxEngine::UploadObjectDataToGpu()
+{
+	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload();
+	DescriptorInfo const* pInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerModel);
+	m_pDevice->UploadBufferData(totalObjectDataBytesToUpload, 0, *m_objectDataBuffer.m_buffer, *pInfo->set, pInfo->bindingId, pInfo->type);
 }

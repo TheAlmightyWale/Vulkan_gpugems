@@ -52,6 +52,8 @@ void GfxDescriptorManager::SetBinding(uint32_t bindingId, vk::ShaderStageFlagBit
 	//One layout per set, but we can allocate multiple sets at once
 	vk::DescriptorSetAllocateInfo dsaInfo(*m_descriptorPool, *info.layout);
 	info.set = std::move(m_pGfxDevice->GetDevice().allocateDescriptorSets(dsaInfo).front());
+	info.bindingId = bindingId;
+	info.type = type;
 	
 	if (m_descriptorSlots.contains(usageFrequency))
 	{
@@ -71,4 +73,9 @@ vk::DescriptorSet GfxDescriptorManager::GetDescriptor(DataUsageFrequency usageFr
 vk::DescriptorSetLayout GfxDescriptorManager::GetLayout(DataUsageFrequency usageFrequency) const
 {
 	return *m_descriptorSlots.at(usageFrequency).layout;
+}
+
+DescriptorInfo const*  GfxDescriptorManager::GetDescriptorInfo(DataUsageFrequency usageFrequency) const
+{
+	return &m_descriptorSlots.at(usageFrequency);
 }

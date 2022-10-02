@@ -9,9 +9,16 @@ enum class DataUsageFrequency {
 };
 
 struct DescriptorInfo {
-	DescriptorInfo() : set(nullptr), layout(nullptr) {}
+	DescriptorInfo() noexcept
+		: set(nullptr)
+		, layout(nullptr)
+		, bindingId(0)
+		, type(vk::DescriptorType::eStorageBuffer) //Good a default as any
+	{}
 	vk::raii::DescriptorSet set;
 	vk::raii::DescriptorSetLayout layout;
+	uint32_t bindingId;
+	vk::DescriptorType type;
 };
 
 using DescriptorSlotMap = std::unordered_map<DataUsageFrequency, DescriptorInfo>;
@@ -29,6 +36,7 @@ public:
 
 	vk::DescriptorSet GetDescriptor(DataUsageFrequency usageFrequency) const;
 	vk::DescriptorSetLayout GetLayout(DataUsageFrequency usageFrequency) const;
+	DescriptorInfo const* GetDescriptorInfo(DataUsageFrequency usageFrequency) const;
 
 private:
 	DescriptorSlotMap m_descriptorSlots;
