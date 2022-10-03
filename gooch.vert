@@ -18,14 +18,11 @@ layout(std430, set = 1, binding = 0) readonly buffer ObjectBuffer {
 	ObjectData objects[];
 } objectBuffer;
 
-layout(location = 0) out vec3 color;
-layout(location = 1) out vec3 oNormal;
+layout(location = 1) out vec3 vertexWorldNormal;
 
 void main()
 {
 	mat4 transform = objectBuffer.camera.viewProj * objectBuffer.objects[gl_BaseInstance].transform;
 	gl_Position = transform * vec4(position, 1.0);
-	color = vec3(0.2,0.2,0.2);
-	vec4 normal4 = normalize(vec4(normal, 1.0) * objectBuffer.objects[gl_BaseInstance].transform);
-	oNormal = normal4.xyz;
+	vertexWorldNormal = (objectBuffer.objects[gl_BaseInstance].transform * vec4(normal, 0.0)).xyz;
 }
