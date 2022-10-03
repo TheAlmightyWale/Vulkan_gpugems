@@ -356,6 +356,7 @@ GfxImage GfxDevice::CreateImage(vk::ImageCreateInfo createInfo, vk::ImageAspectF
 		}
 	);
 	image.view = vk::raii::ImageView(*m_pDevice.get(), imageViewCreateInfo);
+	image.extent = createInfo.extent;
 
 	SPDLOG_DEBUG("Created image resource with dimensions x:{0}, y:{1}", createInfo.extent.width, createInfo.extent.height);
 
@@ -484,4 +485,76 @@ void GfxDevice::UploadBufferData(size_t bytesToUpload, size_t bufferOffset, vk::
 		nullptr
 	);
 	m_pDevice->updateDescriptorSets(writeDescriptor, nullptr);
+}
+
+void GfxDevice::UploadImageData(vk::CommandPool commandPool, vk::Queue submitQueue, GfxImage const& image, GfxBuffer const& imageData)
+{
+	vk::raii::CommandBuffer copyCommands = std::move(CreateCommandBuffers(commandPool, 1).front());
+	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+	copyCommands.begin(beginInfo);
+
+	vk::ImageMemoryBarrier preCopyBarrier = CreateImageTransition( 
+		vk::AccessFlagBits::eNone,
+		vk::AccessFlagBits::eTransferWrite,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eTransferDstOptimal,
+		*image.image
+	);
+
+	copyCommands.pipelineBarrier(
+		vk::PipelineStageFlagBits::eTopOfPipe,
+		vk::PipelineStageFlagBits::eTransfer,
+		vk::DependencyFlagBits::eByRegion,
+		nullptr,
+		nullptr,
+		preCopyBarrier
+	);
+
+	//Do actual upload
+	vk::BufferImageCopy copyRegion(
+		0 /*offset*/,
+		0 /*buffer row length*/,
+		0 /*buffer image height*/,
+		vk::ImageSubresourceLayers(
+			vk::ImageAspectFlagBits::eColor,
+			0/* mip level*/,
+			0/* base array layer*/,
+			1/* layer count*/
+		),
+		vk::Offset3D(0, 0, 0),
+		image.extent
+	);
+
+	copyCommands.copyBufferToImage(
+		*imageData.m_buffer,
+		*image.image,
+		vk::ImageLayout::eTransferDstOptimal,
+		copyRegion
+	);
+
+	vk::ImageMemoryBarrier postCopyMemoryBarrier = CreateImageTransition(
+		vk::AccessFlagBits::eTransferWrite,
+		vk::AccessFlagBits::eShaderRead,
+		//Transfer layout to shader read only
+		vk::ImageLayout::eTransferDstOptimal,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		*image.image
+	);
+
+	copyCommands.pipelineBarrier(
+		vk::PipelineStageFlagBits::eTransfer,
+		vk::PipelineStageFlagBits::eFragmentShader,
+		vk::DependencyFlagBits::eByRegion,
+		nullptr,
+		nullptr,
+		postCopyMemoryBarrier
+	);
+
+	copyCommands.end();
+
+	vk::SubmitInfo submitInfo(nullptr, nullptr, *copyCommands, nullptr);
+	submitQueue.submit(submitInfo);
+
+	//TODO better synchronization rather than waiting idle
+	submitQueue.waitIdle();
 }

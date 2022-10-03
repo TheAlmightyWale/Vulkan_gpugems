@@ -14,6 +14,7 @@ public:
 	vk::raii::CommandPool CreateGraphicsCommandPool();
 	vk::raii::CommandBuffers CreateCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers);
 	void UploadBufferData(size_t bytesToUpload, size_t bufferOffset, vk::Buffer copyFromBuffer, vk::DescriptorSet descriptorSet, uint32_t bindingId, vk::DescriptorType type);
+	void UploadImageData(vk::CommandPool commandPool, vk::Queue submitQueue, GfxImage const& image, GfxBuffer const& imageData);
 	GfxSwapchain CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t desiredSwapchainSize);
 	GfxImage CreateDepthStencil(uint32_t width, uint32_t height, vk::Format depthFormat);
 	vk::raii::Semaphore CreateVkSemaphore();

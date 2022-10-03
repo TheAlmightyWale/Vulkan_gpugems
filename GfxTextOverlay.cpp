@@ -78,74 +78,9 @@ GfxTextOverlay::GfxTextOverlay(
 	GfxBuffer stagingBuffer = pDevice->CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc);
 	memcpy(stagingBuffer.m_pData, &font24Pixels[0][0], static_cast<size_t>(k_fontWidth * k_fontHeight)); //Size of font texture is 1 byte hence just need width * height
 
-	//upload to GPU - start
-	vk::raii::CommandBuffer copyCommands = std::move(pDevice->CreateCommandBuffers(graphicsCommandPool, 1).front());
-	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-	copyCommands.begin(beginInfo);
-
-	//Create image barrier to perform layout transition if needed
-	vk::ImageMemoryBarrier preCopyBarrier = pDevice->CreateImageTransition(vk::AccessFlagBits::eNone,
-		vk::AccessFlagBits::eTransferWrite,
-		vk::ImageLayout::eUndefined,
-		vk::ImageLayout::eTransferDstOptimal,
-		*textImage.image);
-
-	copyCommands.pipelineBarrier(
-		vk::PipelineStageFlagBits::eTopOfPipe,
-		vk::PipelineStageFlagBits::eTransfer,
-		vk::DependencyFlagBits::eByRegion,
-		nullptr,
-		nullptr,
-		preCopyBarrier
-	);
-
-	//Do actual upload
-	vk::BufferImageCopy copyRegion(
-		0 /*offset*/,
-		0 /*buffer row length*/,
-		0 /*buffer image height*/,
-		vk::ImageSubresourceLayers(
-			vk::ImageAspectFlagBits::eColor,
-			0/* mip level*/,
-			0/* base array layer*/,
-			1/* layer count*/
-		),
-		vk::Offset3D(0, 0, 0),
-		vk::Extent3D(k_fontWidth, k_fontHeight, 1)
-	);
-
-	copyCommands.copyBufferToImage(
-		*stagingBuffer.m_buffer,
-		*textImage.image,
-		vk::ImageLayout::eTransferDstOptimal,
-		copyRegion
-	);
-
-	vk::ImageMemoryBarrier postCopyMemoryBarrier = pDevice->CreateImageTransition(
-		vk::AccessFlagBits::eTransferWrite,
-		vk::AccessFlagBits::eShaderRead,
-		//Transfer layout to shader read only
-		vk::ImageLayout::eTransferDstOptimal,
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		*textImage.image
-	);
-	copyCommands.pipelineBarrier(
-		vk::PipelineStageFlagBits::eTransfer,
-		vk::PipelineStageFlagBits::eFragmentShader,
-		vk::DependencyFlagBits::eByRegion,
-		nullptr,
-		nullptr,
-		postCopyMemoryBarrier
-	);
-
-	copyCommands.end();
 
 	vk::Queue uploadQueue = pDevice->GetGraphicsQueue();
-	vk::SubmitInfo submitInfo(nullptr, nullptr, *copyCommands, nullptr);
-	uploadQueue.submit(submitInfo);
-
-	//TODO better synchronization rather than waiting idle
-	uploadQueue.waitIdle();
+	pDevice->UploadImageData(graphicsCommandPool, uploadQueue, textImage, stagingBuffer);
 
 	//Create sampler for text image
 	vk::SamplerCreateInfo samplerCreateInfo(
