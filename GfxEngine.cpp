@@ -15,6 +15,7 @@
 
 //TODO move use of static model to a bucket system
 #include "StaticModel.h"
+#include "ImageLoader.h"
 
 //TODO wrap extensions and layers into configurable features?
 std::vector<const char*> const k_deviceExtensions{
@@ -30,6 +31,7 @@ glm::vec3 const k_light(-1.0f, 0.0f, -8.0f);
 
 constexpr uint32_t k_lightBindingId = 0;
 constexpr uint32_t k_transformBindingId = 0;
+constexpr uint32_t k_textureBindingId = 0;
 
 GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow, std::shared_ptr<ObjectProcessor> pObjectProcessor)
 	: m_pInstance(nullptr)
@@ -41,22 +43,19 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_frames()
 	, m_depthBuffer()
 	, m_pipeline()
-	, m_graphicsQueue(nullptr)
 	, m_textOverlay()
 	, m_pMeshPool(std::make_shared<MeshPool>())
 	, m_models()
+	, m_textureImage()
+	, m_textureSampler(nullptr)
 	, m_pCamera(std::make_shared<Camera>(pWindow->GetWindowWidth(), pWindow->GetWindowHeight()))
 	, m_lightBuffer()
 	, m_objectDataBuffer()
 	, m_numFramesRendered(0)
 	, m_pDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
-	, m_samplers()
 	, m_pObjectProcessor(pObjectProcessor)
 {
-	//TODO remove eventually when we have a scene loader
-	m_pObjectProcessor->SetCamera(m_pCamera);
-
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
 
 	//Create device
@@ -73,8 +72,11 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_pDescriptorManager = std::make_unique<GfxDescriptorManager>(m_pDevice);
 
 	//Load shaders
-	vk::raii::ShaderModule fragmentShader = LoadShaderModule("gooch.frag.spv");
-	vk::raii::ShaderModule vertexShader = LoadShaderModule("gooch.vert.spv");
+	// TODO manage pipelines for different shader needs
+	//vk::raii::ShaderModule fragmentShader = LoadShaderModule("gooch.frag.spv");
+	//vk::raii::ShaderModule vertexShader = LoadShaderModule("gooch.vert.spv");
+	vk::raii::ShaderModule fragmentShader = LoadShaderModule("blinnPhong.frag.spv");
+	vk::raii::ShaderModule vertexShader = LoadShaderModule("blinnPhong.vert.spv");
 
 	VkSurfaceKHR _surface;
 	glfwCreateWindowSurface(*m_pInstance->GetInstance(), pWindow->Get(), nullptr, &_surface);
@@ -179,45 +181,119 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	//Model variables
 	SPDLOG_INFO("Loading Scene");
 
+	//TODO remove eventually when we have a scene loader
+	m_pObjectProcessor->SetCamera(m_pCamera);
+
 	//Todo move scene loading somewhere else
 	// good rust candidate?
-	uint32_t const k_modelCount = 8;
-	for (uint32_t i = 0; i < k_modelCount; ++i)
-	{
-		auto pModel = std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj", m_pObjectProcessor);
-		m_models.emplace_back(pModel);
+	constexpr uint32_t k_modelCount = 8;
+	constexpr uint32_t k_cubeCount = 12;
 
-		//place meshes in a gently rising grid
-		float const k_modelSpacing = 2.0f;
-		glm::vec3 position(i % 3 * k_modelSpacing, i * k_modelSpacing * 0.5f, i % 3 * k_modelSpacing);
-		pModel->SetPosition(position);
+	//for (uint32_t i = 0; i < k_modelCount; ++i)
+	//{
+	//	auto pModel = std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj", m_pObjectProcessor);
+	//	m_models.emplace_back(pModel);
+	//
+	//	//place meshes in a gently rising grid
+	//	float const k_modelSpacing = 2.0f;
+	//	glm::vec3 position(i % 3 * k_modelSpacing, i * k_modelSpacing, i % 3 * k_modelSpacing);
+	//	pModel->SetPosition(position);
+	//}
+
+	for (uint32_t i = 0; i < k_cubeCount; ++i)
+	{
+		auto pCube = std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/cube.obj", m_pObjectProcessor);
+		m_models.emplace_back(pCube);
+
+		//place cubes in an offset grid
+		float const k_cubeSpacing = 2.0f;
+		glm::vec3 position(i % 3 * k_cubeSpacing, i * k_cubeSpacing * 0.5f, i % 4 * k_cubeSpacing + 5.0f);
+		pCube->SetPosition(position);
 	}
 
 	SPDLOG_INFO("Constructing descriptor sets");
 
+	//Per object data
 	m_pDescriptorManager->SetBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
 	constexpr size_t k_objectDataBufferSize = sizeof(ObjectData) * k_maxModelTransforms + sizeof(CameraShaderData);//Only taking one camera into account
 	m_objectDataBuffer = m_pDevice->CreateBuffer(k_objectDataBufferSize, vk::BufferUsageFlagBits::eStorageBuffer);
 
-	//Lights
+	//Per frame data
 	m_pDescriptorManager->SetBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
 
 	m_lightBuffer = m_pDevice->CreateBuffer(sizeof(k_light), vk::BufferUsageFlagBits::eUniformBuffer);
 	vk::DescriptorBufferInfo lightBufferInfo(*m_lightBuffer.m_buffer, 0, m_lightBuffer.m_dataSize);
+	DescriptorInfo const* pPerFrameInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerFrame);
 	vk::WriteDescriptorSet writeDescriptor(
-		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
-		k_lightBindingId,
+		*pPerFrameInfo->set,
+		pPerFrameInfo->bindingId,
 		0 /*array element*/,
-		vk::DescriptorType::eUniformBuffer,
+		pPerFrameInfo->type,
 		nullptr, lightBufferInfo, nullptr);
 	m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
 	memcpy(m_lightBuffer.m_pData, &k_light, m_lightBuffer.m_dataSize);
+
+	//Per material data
+	m_pDescriptorManager->SetBinding(k_textureBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerMaterial, vk::DescriptorType::eCombinedImageSampler);
+	//Load Texture image
+	ImagePtr_t pImage = ImageLoader::LoadTexture(*m_pDevice, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/fish.png");
+
+	vk::ImageCreateInfo textureCreateInfo(
+		{},
+		vk::ImageType::e2D,
+		pImage->format,
+		vk::Extent3D{
+			pImage->width,
+			pImage->height,
+			1
+		},
+		1 /*Mip levels*/,
+		1 /*array levels*/,
+		vk::SampleCountFlagBits::e1,
+		vk::ImageTiling::eOptimal,
+		vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+		vk::SharingMode::eExclusive
+	);
+	m_textureImage = m_pDevice->CreateImage(textureCreateInfo, vk::ImageAspectFlagBits::eColor, vk::MemoryPropertyFlagBits::eDeviceLocal);
+	m_pDevice->UploadImageData(*m_frames[0].commandPool, m_pDevice->GetGraphicsQueue(), m_textureImage, pImage->data);
+
+	//Create Texture Sampler and bind it
+	vk::SamplerCreateInfo samplerCreateInfo(
+		{},
+		vk::Filter::eLinear,
+		vk::Filter::eLinear,
+		vk::SamplerMipmapMode::eLinear,
+		/*address modes for U,V,W respectively*/
+		vk::SamplerAddressMode::eMirroredRepeat,
+		vk::SamplerAddressMode::eMirroredRepeat,
+		vk::SamplerAddressMode::eMirroredRepeat,
+		0.0f /*mip LOD bias*/,
+		VK_FALSE /*Anisotropy enable*/,
+		0.0f /*max anisotrophy*/,
+		VK_FALSE /*compare enable*/,
+		vk::CompareOp::eNever,
+		0.0f /*min LOD*/,
+		1.0f /*max LOD*/,
+		vk::BorderColor::eFloatOpaqueWhite
+	);
+	m_textureSampler = vk::raii::Sampler(m_pDevice->GetDevice(), samplerCreateInfo);
+	vk::DescriptorImageInfo textureDescriptor(*m_textureSampler, *m_textureImage.view, vk::ImageLayout::eShaderReadOnlyOptimal);
+	DescriptorInfo const* pPerMaterialInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerMaterial);
+	vk::WriteDescriptorSet samplerWrite(
+		*pPerMaterialInfo->set,
+		pPerMaterialInfo->bindingId,
+		0,
+		pPerMaterialInfo->type,
+		textureDescriptor
+	);
+	m_pDevice->GetDevice().updateDescriptorSets(samplerWrite, nullptr);
 
 	SPDLOG_INFO("Constructing Pipeline");
 
 	vk::DescriptorSetLayout lightLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
 	vk::DescriptorSetLayout transformLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerModel);
-	std::vector<vk::DescriptorSetLayout> layouts = { lightLayout, transformLayout };
+	vk::DescriptorSetLayout textureLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerMaterial);
+	std::vector<vk::DescriptorSetLayout> layouts = { lightLayout, transformLayout, textureLayout };
 	m_pipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), nullptr, layouts);
 
 	GfxPipelineBuilder builder;
@@ -310,7 +386,9 @@ void GfxEngine::Render()
 		vk::PipelineBindPoint::eGraphics,
 		*m_pipeline.layout,
 		0,
-		{ m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame), m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel) }, //Bind per model here as we are going bindless
+		{ m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
+		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
+		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerMaterial)}, //Bind per model and material here as we are going bindless
 		nullptr
 	);
 

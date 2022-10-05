@@ -395,7 +395,7 @@ vk::raii::Fence GfxDevice::CreateFence()
 }
 
 //CreateBuffer takes in the size of the data, but the actual buffer allocation may be larger due to alignment
-GfxBuffer GfxDevice::CreateBuffer(size_t dataSize, vk::BufferUsageFlagBits flags)
+GfxBuffer GfxDevice::CreateBuffer(size_t dataSize, vk::BufferUsageFlagBits flags) noexcept
 {
 	size_t alignedSize = GetAlignedSize(dataSize, flags, GetProperties());
 

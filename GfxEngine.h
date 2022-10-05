@@ -56,8 +56,6 @@ private:
 	GfxImage m_depthBuffer;
 	GfxPipeline m_pipeline;
 
-	vk::raii::Queue m_graphicsQueue;
-
 	//Functionality
 	//Text
 	GfxTextOverlay m_textOverlay;
@@ -65,6 +63,10 @@ private:
 	//Meshes
 	MeshPoolPtr_t m_pMeshPool;
 	std::vector<StaticModelPtr_t> m_models;
+
+	//Texture
+	GfxImage m_textureImage;
+	vk::raii::Sampler m_textureSampler;
 
 	uint64_t m_numFramesRendered;
 
@@ -77,9 +79,5 @@ private:
 
 	//Perf timers
 	vk::raii::QueryPool m_timingQueryPool;
-
-	//TODO turn into hash map with hash based on sampler properties
-	std::vector<vk::raii::Sampler> m_samplers;
-
 };
 

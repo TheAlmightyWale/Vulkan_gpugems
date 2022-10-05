@@ -6,6 +6,7 @@
 enum class DataUsageFrequency {
 	ePerFrame,
 	ePerModel,
+	ePerMaterial,
 };
 
 struct DescriptorInfo {

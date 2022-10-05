@@ -120,6 +120,9 @@
     <ClCompile Include="ObjectProcessor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ImageLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math.h">
@@ -167,9 +170,6 @@
     <ClInclude Include="Mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Cube.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="GfxBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -203,6 +203,9 @@
     <ClInclude Include="ObjectProcessor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ImageLoader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="triangle.vert">
@@ -221,6 +224,12 @@
       <Filter>Resource Files\Shaders</Filter>
     </CustomBuild>
     <CustomBuild Include="gooch.vert">
+      <Filter>Resource Files\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="blinnPhong.frag">
+      <Filter>Resource Files\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="blinnPhong.vert">
       <Filter>Resource Files\Shaders</Filter>
     </CustomBuild>
   </ItemGroup>
