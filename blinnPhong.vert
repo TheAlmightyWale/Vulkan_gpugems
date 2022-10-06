@@ -20,13 +20,17 @@ layout(std430, set = 1, binding = 0) readonly buffer ObjectBuffer {
 
 
 layout(location = 0) out vec3 vertexWorldNormal;
-layout(location = 1) out vec2 otextureCoords;
+layout(location = 1) out vec3 vertexWorldPos;
+layout(location = 2) out vec2 otextureCoords;
 
 void main()
 {
 	mat4 transform = objectBuffer.camera.viewProj * objectBuffer.objects[gl_BaseInstance].transform;
 	gl_Position = transform * vec4(position, 1.0);
-	vertexWorldNormal = (objectBuffer.objects[gl_BaseInstance].transform * vec4(normal, 0.0)).xyz;
+
+	//TODO take in normal matrix to do transform here as this will break lighting if we are not uniformly scaling models
+	vertexWorldNormal = normalize((objectBuffer.objects[gl_BaseInstance].transform * vec4(normal, 0.0)).xyz);
+	vertexWorldPos = (objectBuffer.objects[gl_BaseInstance].transform * vec4(position, 1.0)).xyz;
 	otextureCoords = textureCoords;
 }
 

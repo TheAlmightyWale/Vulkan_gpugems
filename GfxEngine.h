@@ -39,6 +39,7 @@ protected:
 
 	size_t PrepObjectDataForUpload();
 	void UploadObjectDataToGpu();
+	void UploadFrameDataToGpu();
 
 	vk::raii::ShaderModule LoadShaderModule(std::string const& filePath);
 
@@ -73,7 +74,7 @@ private:
 	//TODO move out scene info
 	std::shared_ptr<Camera> m_pCamera;
 	GfxDescriptorManagerPtr_t m_pDescriptorManager;
-	GfxBuffer m_lightBuffer;
+	GfxBuffer m_frameDataBuffer;
 	GfxBuffer m_objectDataBuffer;
 	std::shared_ptr<ObjectProcessor> m_pObjectProcessor;
 

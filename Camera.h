@@ -17,6 +17,7 @@ public:
 	void Process(ControllerInput const& inputState, float deltaTime );
 
 	glm::mat4 const& GetViewProj() const noexcept;
+	glm::vec3 const& GetPosition() const noexcept;
 
 private:
 	glm::vec3 m_target;

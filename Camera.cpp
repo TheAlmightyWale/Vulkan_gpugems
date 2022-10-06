@@ -45,3 +45,8 @@ glm::mat4 const& Camera::GetViewProj() const noexcept
 {
 	return m_cameraShaderData.viewProj;
 }
+
+glm::vec3 const& Camera::GetPosition() const noexcept
+{
+	return m_position;
+}

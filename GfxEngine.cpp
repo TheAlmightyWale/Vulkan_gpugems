@@ -29,6 +29,11 @@ std::vector<const char*> const k_deviceLayers{
 
 glm::vec3 const k_light(-1.0f, 0.0f, -8.0f);
 
+struct FrameData {
+	glm::vec4 directionalLight;
+	glm::vec4 cameraPosition;
+};
+
 constexpr uint32_t k_lightBindingId = 0;
 constexpr uint32_t k_transformBindingId = 0;
 constexpr uint32_t k_textureBindingId = 0;
@@ -49,7 +54,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_textureImage()
 	, m_textureSampler(nullptr)
 	, m_pCamera(std::make_shared<Camera>(pWindow->GetWindowWidth(), pWindow->GetWindowHeight()))
-	, m_lightBuffer()
+	, m_frameDataBuffer()
 	, m_objectDataBuffer()
 	, m_numFramesRendered(0)
 	, m_pDescriptorManager(nullptr)
@@ -187,7 +192,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	//Todo move scene loading somewhere else
 	// good rust candidate?
 	constexpr uint32_t k_modelCount = 8;
-	constexpr uint32_t k_cubeCount = 12;
+	constexpr uint32_t k_cubeCount = 1;//12;
 
 	//for (uint32_t i = 0; i < k_modelCount; ++i)
 	//{
@@ -209,6 +214,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		float const k_cubeSpacing = 2.0f;
 		glm::vec3 position(i % 3 * k_cubeSpacing, i * k_cubeSpacing * 0.5f, i % 4 * k_cubeSpacing + 5.0f);
 		pCube->SetPosition(position);
+		pCube->SetScale(glm::vec3(3.0, 3.0, 3.0));
 	}
 
 	SPDLOG_INFO("Constructing descriptor sets");
@@ -220,18 +226,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Per frame data
 	m_pDescriptorManager->SetBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
-
-	m_lightBuffer = m_pDevice->CreateBuffer(sizeof(k_light), vk::BufferUsageFlagBits::eUniformBuffer);
-	vk::DescriptorBufferInfo lightBufferInfo(*m_lightBuffer.m_buffer, 0, m_lightBuffer.m_dataSize);
-	DescriptorInfo const* pPerFrameInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerFrame);
-	vk::WriteDescriptorSet writeDescriptor(
-		*pPerFrameInfo->set,
-		pPerFrameInfo->bindingId,
-		0 /*array element*/,
-		pPerFrameInfo->type,
-		nullptr, lightBufferInfo, nullptr);
-	m_pDevice->GetDevice().updateDescriptorSets(writeDescriptor, nullptr);
-	memcpy(m_lightBuffer.m_pData, &k_light, m_lightBuffer.m_dataSize);
+	m_frameDataBuffer = m_pDevice->CreateBuffer(sizeof(FrameData), vk::BufferUsageFlagBits::eUniformBuffer);
 
 	//Per material data
 	m_pDescriptorManager->SetBinding(k_textureBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerMaterial, vk::DescriptorType::eCombinedImageSampler);
@@ -380,6 +375,7 @@ void GfxEngine::Render()
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
 	//Copy data to gpu before binding descriptor set
+	UploadFrameDataToGpu();
 	UploadObjectDataToGpu();
 
 	frame.commandBuffers[0].bindDescriptorSets(
@@ -484,4 +480,16 @@ void GfxEngine::UploadObjectDataToGpu()
 	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload();
 	DescriptorInfo const* pInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerModel);
 	m_pDevice->UploadBufferData(totalObjectDataBytesToUpload, 0, *m_objectDataBuffer.m_buffer, *pInfo->set, pInfo->bindingId, pInfo->type);
+}
+
+void GfxEngine::UploadFrameDataToGpu()
+{
+	DescriptorInfo const* pInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerFrame);
+
+	FrameData data;
+	data.directionalLight = glm::vec4(k_light, 1.0f);
+	data.cameraPosition = glm::vec4(m_pCamera->GetPosition(), 1.0f);
+	m_frameDataBuffer.CopyToBuffer(&data, sizeof(FrameData), 0);
+
+	m_pDevice->UploadBufferData(sizeof(FrameData), 0, *m_frameDataBuffer.m_buffer, *pInfo->set, pInfo->bindingId, pInfo->type);
 }
