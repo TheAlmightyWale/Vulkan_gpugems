@@ -38,6 +38,9 @@ constexpr uint32_t k_lightBindingId = 0;
 constexpr uint32_t k_transformBindingId = 0;
 constexpr uint32_t k_textureBindingId = 0;
 
+constexpr uint32_t k_modelCount = 8;
+constexpr uint32_t k_cubeCount = 12;
+
 GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, WindowPtr_t pWindow, std::shared_ptr<ObjectProcessor> pObjectProcessor)
 	: m_pInstance(nullptr)
 	, m_pWindow(pWindow)
@@ -48,6 +51,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_frames()
 	, m_depthBuffer()
 	, m_pipeline()
+	, m_goochPipeline()
 	, m_textOverlay()
 	, m_pMeshPool(std::make_shared<MeshPool>())
 	, m_models()
@@ -58,6 +62,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_objectDataBuffer()
 	, m_numFramesRendered(0)
 	, m_pDescriptorManager(nullptr)
+	, m_pGoochDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
 	, m_pObjectProcessor(pObjectProcessor)
 {
@@ -78,10 +83,10 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Load shaders
 	// TODO manage pipelines for different shader needs
-	//vk::raii::ShaderModule fragmentShader = LoadShaderModule("gooch.frag.spv");
-	//vk::raii::ShaderModule vertexShader = LoadShaderModule("gooch.vert.spv");
-	vk::raii::ShaderModule fragmentShader = LoadShaderModule("blinnPhong.frag.spv");
-	vk::raii::ShaderModule vertexShader = LoadShaderModule("blinnPhong.vert.spv");
+	vk::raii::ShaderModule goochFragmentShader = LoadShaderModule("gooch.frag.spv");
+	vk::raii::ShaderModule goochVertexShader = LoadShaderModule("gooch.vert.spv");
+	vk::raii::ShaderModule phongFragmentShader = LoadShaderModule("blinnPhong.frag.spv");
+	vk::raii::ShaderModule phongVertexShader = LoadShaderModule("blinnPhong.vert.spv");
 
 	VkSurfaceKHR _surface;
 	glfwCreateWindowSurface(*m_pInstance->GetInstance(), pWindow->Get(), nullptr, &_surface);
@@ -191,19 +196,16 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Todo move scene loading somewhere else
 	// good rust candidate?
-	constexpr uint32_t k_modelCount = 8;
-	constexpr uint32_t k_cubeCount = 1;//12;
-
-	//for (uint32_t i = 0; i < k_modelCount; ++i)
-	//{
-	//	auto pModel = std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj", m_pObjectProcessor);
-	//	m_models.emplace_back(pModel);
-	//
-	//	//place meshes in a gently rising grid
-	//	float const k_modelSpacing = 2.0f;
-	//	glm::vec3 position(i % 3 * k_modelSpacing, i * k_modelSpacing, i % 3 * k_modelSpacing);
-	//	pModel->SetPosition(position);
-	//}
+	for (uint32_t i = 0; i < k_modelCount; ++i)
+	{
+		auto pModel = std::make_shared<StaticModel>(m_pDevice, m_pMeshPool, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/pirate.obj", m_pObjectProcessor);
+		m_models.emplace_back(pModel);
+	
+		//place meshes in a gently rising grid
+		float const k_modelSpacing = 2.0f;
+		glm::vec3 position(i % 3 * k_modelSpacing, i * k_modelSpacing, i % 3 * k_modelSpacing);
+		pModel->SetPosition(position);
+	}
 
 	for (uint32_t i = 0; i < k_cubeCount; ++i)
 	{
@@ -214,7 +216,6 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		float const k_cubeSpacing = 2.0f;
 		glm::vec3 position(i % 3 * k_cubeSpacing, i * k_cubeSpacing * 0.5f, i % 4 * k_cubeSpacing + 5.0f);
 		pCube->SetPosition(position);
-		pCube->SetScale(glm::vec3(3.0, 3.0, 3.0));
 	}
 
 	SPDLOG_INFO("Constructing descriptor sets");
@@ -283,7 +284,37 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	);
 	m_pDevice->GetDevice().updateDescriptorSets(samplerWrite, nullptr);
 
-	SPDLOG_INFO("Constructing Pipeline");
+	vk::Viewport viewport(0.0f, (float)height, (float)width, -(float)height, 0.0f, 1.0f);
+
+	SPDLOG_INFO("Constructing Gooch Pipeline");
+	m_pGoochDescriptorManager = std::make_unique<GfxDescriptorManager>(m_pDevice);
+
+	m_pGoochDescriptorManager->SetBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
+	m_pGoochDescriptorManager->SetBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
+
+	vk::DescriptorSetLayout goochFrameLayout = m_pGoochDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
+	vk::DescriptorSetLayout goochModelLayout = m_pGoochDescriptorManager->GetLayout(DataUsageFrequency::ePerModel);
+	std::vector<vk::DescriptorSetLayout> goochlayouts = { goochFrameLayout, goochModelLayout };
+
+	m_goochPipeline.layout = GfxPipelineBuilder::CreatePipelineLayout(m_pDevice->GetDevice(), nullptr, goochlayouts);
+
+	GfxPipelineBuilder goochBuilder;
+	goochBuilder._shaderStages.push_back(GfxPipelineBuilder::CreateShaderStageInfo(vk::ShaderStageFlagBits::eVertex, *goochVertexShader));
+	goochBuilder._shaderStages.push_back(GfxPipelineBuilder::CreateShaderStageInfo(vk::ShaderStageFlagBits::eFragment, *goochFragmentShader));
+	goochBuilder._inputAssembly = GfxPipelineBuilder::CreateInputAssemblyInfo(vk::PrimitiveTopology::eTriangleList);
+	goochBuilder._viewport = viewport;
+	goochBuilder._scissor.setOffset({ 0,0 });
+	goochBuilder._scissor.setExtent({ width, height });
+	goochBuilder._rasterizer = GfxPipelineBuilder::CreateRasterizationStateInfo(vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone);
+	goochBuilder._depthStencil = GfxPipelineBuilder::CreateDepthStencilStateInfo(VK_TRUE, VK_TRUE, vk::CompareOp::eLess);
+	goochBuilder._multisampling = GfxPipelineBuilder::CreateMultisampleStateInfo();
+	goochBuilder._colorBlendAttachment = GfxPipelineBuilder::CreateColorBlendAttachmentState();
+	goochBuilder._pipelineLayout = *m_goochPipeline.layout;
+	goochBuilder._vertexDescription = Vertex::GetDescription();
+
+	m_goochPipeline.pipeline = goochBuilder.BuildPipeline(m_pDevice->GetDevice(), *m_renderPass);
+
+	SPDLOG_INFO("Constructing Phong Pipeline");
 
 	vk::DescriptorSetLayout lightLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
 	vk::DescriptorSetLayout transformLayout = m_pDescriptorManager->GetLayout(DataUsageFrequency::ePerModel);
@@ -293,19 +324,14 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	GfxPipelineBuilder builder;
 	builder._shaderStages.push_back(
-		GfxPipelineBuilder::CreateShaderStageInfo(vk::ShaderStageFlagBits::eVertex, *vertexShader)
+		GfxPipelineBuilder::CreateShaderStageInfo(vk::ShaderStageFlagBits::eVertex, *phongVertexShader)
 	);
 	builder._shaderStages.push_back(
-		GfxPipelineBuilder::CreateShaderStageInfo(vk::ShaderStageFlagBits::eFragment, *fragmentShader)
+		GfxPipelineBuilder::CreateShaderStageInfo(vk::ShaderStageFlagBits::eFragment, *phongFragmentShader)
 	);
 
 	builder._inputAssembly = GfxPipelineBuilder::CreateInputAssemblyInfo(vk::PrimitiveTopology::eTriangleList);
-	builder._viewport.setX(0.0f);
-	builder._viewport.setY((float)height);
-	builder._viewport.setWidth((float)width);
-	builder._viewport.setHeight(-(float)height);
-	builder._viewport.setMinDepth(0.0f);
-	builder._viewport.setMaxDepth(1.0f);
+	builder._viewport = viewport;
 
 	builder._scissor.setOffset({ 0, 0 });
 	builder._scissor.setExtent({ width, height });
@@ -389,14 +415,25 @@ void GfxEngine::Render()
 	);
 
 	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
-	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
 
-	for (uint32_t i = 0; i < m_models.size(); ++i)
+	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_goochPipeline.pipeline);
+	for (uint32_t i = 0; i < k_modelCount; ++i)
 	{
 		StaticModelPtr_t const& pModel = m_models[i];
 		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
 		frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
 		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, i /*first instance*/);
+	}
+
+	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
+	
+	for (uint32_t i = 0; i < k_cubeCount; ++i)
+	{
+		uint32_t modelIndex = i + k_modelCount;
+		StaticModelPtr_t const& pModel = m_models[modelIndex];
+		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
+		frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
+		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, modelIndex /*first instance*/);
 	}
 
 	frame.commandBuffers[0].endRenderPass();

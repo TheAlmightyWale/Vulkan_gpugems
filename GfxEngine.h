@@ -31,7 +31,6 @@ public:
 	GfxEngine& operator=(GfxEngine const&) = delete;
 	GfxEngine& operator=(GfxEngine&&) = delete;
 
-
 	void Render();
 
 protected:
@@ -56,6 +55,7 @@ private:
 	std::vector<GfxFrame> m_frames;
 	GfxImage m_depthBuffer;
 	GfxPipeline m_pipeline;
+	GfxPipeline m_goochPipeline;
 
 	//Functionality
 	//Text
@@ -74,6 +74,7 @@ private:
 	//TODO move out scene info
 	std::shared_ptr<Camera> m_pCamera;
 	GfxDescriptorManagerPtr_t m_pDescriptorManager;
+	GfxDescriptorManagerPtr_t m_pGoochDescriptorManager;
 	GfxBuffer m_frameDataBuffer;
 	GfxBuffer m_objectDataBuffer;
 	std::shared_ptr<ObjectProcessor> m_pObjectProcessor;

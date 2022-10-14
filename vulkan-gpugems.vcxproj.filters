@@ -25,6 +25,9 @@
     <Filter Include="Extern\ObjParser">
       <UniqueIdentifier>{d642fe6f-fe0b-4697-a3f1-5930a7a607b3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="TerrainGeneration">
+      <UniqueIdentifier>{36055500-48e9-49a8-ba9c-bddf9c60a30b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -123,6 +126,9 @@
     <ClCompile Include="ImageLoader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TerrainGenerator.cpp">
+      <Filter>TerrainGeneration</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math.h">
@@ -205,6 +211,9 @@
     </ClInclude>
     <ClInclude Include="ImageLoader.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TerrainGenerator.h">
+      <Filter>TerrainGeneration</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
