@@ -222,6 +222,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ModelLoader.cpp" />
     <ClCompile Include="ObjectProcessor.cpp" />
+    <ClCompile Include="ShaderLoader.cpp" />
     <ClCompile Include="StaticModel.cpp" />
     <ClCompile Include="TerrainGenerator.cpp" />
     <ClCompile Include="Window.cpp" />
@@ -252,6 +253,7 @@
     <ClInclude Include="ModelLoader.h" />
     <ClInclude Include="ObjectDefinitions.h" />
     <ClInclude Include="ObjectProcessor.h" />
+    <ClInclude Include="ShaderLoader.h" />
     <ClInclude Include="StaticModel.h" />
     <ClInclude Include="TerrainGenerator.h" />
     <ClInclude Include="Window.h" />

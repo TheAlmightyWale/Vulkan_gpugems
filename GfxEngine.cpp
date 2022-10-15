@@ -8,14 +8,11 @@
 #include "Logger.h"
 #include "Exceptions.h"
 
-#include <fstream>
-
-//TODO Temp for uniform buffer testing, move to camera class 
-#include "Math.h"
-
 //TODO move use of static model to a bucket system
 #include "StaticModel.h"
 #include "ImageLoader.h"
+
+#include "ShaderLoader.h"
 
 //TODO wrap extensions and layers into configurable features?
 std::vector<const char*> const k_deviceExtensions{
@@ -83,10 +80,10 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 
 	//Load shaders
 	// TODO manage pipelines for different shader needs
-	vk::raii::ShaderModule goochFragmentShader = LoadShaderModule("gooch.frag.spv");
-	vk::raii::ShaderModule goochVertexShader = LoadShaderModule("gooch.vert.spv");
-	vk::raii::ShaderModule phongFragmentShader = LoadShaderModule("blinnPhong.frag.spv");
-	vk::raii::ShaderModule phongVertexShader = LoadShaderModule("blinnPhong.vert.spv");
+	vk::raii::ShaderModule goochFragmentShader = ShaderLoader::LoadModule("gooch.frag.spv", m_pDevice);
+	vk::raii::ShaderModule goochVertexShader = ShaderLoader::LoadModule("gooch.vert.spv", m_pDevice);
+	vk::raii::ShaderModule phongFragmentShader = ShaderLoader::LoadModule("blinnPhong.frag.spv", m_pDevice);
+	vk::raii::ShaderModule phongVertexShader = ShaderLoader::LoadModule("blinnPhong.vert.spv", m_pDevice);
 
 	VkSurfaceKHR _surface;
 	glfwCreateWindowSurface(*m_pInstance->GetInstance(), pWindow->Get(), nullptr, &_surface);
@@ -348,10 +345,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	//TODO move out
 	m_timingQueryPool = m_pDevice->CreateQueryPool(k_queryPoolCount);
 
-	//TODO move out
-	vk::raii::ShaderModule textVertShader = LoadShaderModule("text.vert.spv");
-	vk::raii::ShaderModule textFragShader = LoadShaderModule("text.frag.spv");
-	m_textOverlay = GfxTextOverlay(m_pDevice, *m_frames[0].commandPool, builder._viewport, builder._scissor, *textVertShader, *textFragShader);
+	m_textOverlay = GfxTextOverlay(m_pDevice, *m_frames[0].commandPool, builder._viewport, builder._scissor);
 }
 
 GfxEngine::~GfxEngine()
@@ -459,35 +453,6 @@ void GfxEngine::Render()
 	m_pWindow->SetTitle(std::format("cpu: {0:.3f}ms gpu: {1:.3f}ms", frameCpuEndTime - frameCpuBeginTime, frameGpuEndTime - frameGpuBeginTime));
 
 	m_numFramesRendered++;
-}
-
-vk::raii::ShaderModule GfxEngine::LoadShaderModule(std::string const& filePath)
-{
-	//TODO RAII files
-	std::ifstream file(filePath, std::ios::ate | std::ios::binary);
-
-	if (!file.is_open())
-	{
-		throw InvalidStateException("Failed to load shader module at: " + filePath);
-	}
-
-	//Since cursor starts at end we can get file size by reading it's position
-	size_t fileSize = (size_t)file.tellg();
-
-	//spriv expects buffers to be measure in 32bits
-	std::vector<uint32_t> buffer(fileSize / (sizeof(uint32_t)));
-
-	file.seekg(0);
-	file.read((char*)buffer.data(), fileSize);
-	file.close();
-
-	//size is expected to be in 32bit size
-	vk::ShaderModuleCreateInfo createInfo({}, buffer.size() * sizeof(uint32_t), buffer.data());
-	vk::raii::ShaderModule shaderModule(m_pDevice->GetDevice(), createInfo);
-
-	SPDLOG_INFO("Loaded shader found at: " + filePath);
-
-	return std::move(shaderModule);
 }
 
 GfxFrame& GfxEngine::GetCurrentFrame()

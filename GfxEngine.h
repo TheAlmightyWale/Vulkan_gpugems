@@ -40,8 +40,6 @@ protected:
 	void UploadObjectDataToGpu();
 	void UploadFrameDataToGpu();
 
-	vk::raii::ShaderModule LoadShaderModule(std::string const& filePath);
-
 private:
 
 	WindowPtr_t m_pWindow;

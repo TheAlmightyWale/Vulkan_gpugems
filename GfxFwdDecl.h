@@ -3,6 +3,7 @@
 //dynamically load everything we need
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 
+//TODO move this out of the fwd declaration to speed up compile times
 #include <vulkan/vulkan_raii.hpp>
 
 using InstancePtr_t = std::shared_ptr<vk::raii::Instance>;

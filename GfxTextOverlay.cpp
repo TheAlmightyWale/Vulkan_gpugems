@@ -6,6 +6,7 @@
 #include "Math.h"
 #include "Exceptions.h"
 #include "Logger.h"
+#include "ShaderLoader.h"
 
 GfxTextOverlay::GfxTextOverlay()
 	: overlayPipeline(nullptr)
@@ -25,9 +26,7 @@ GfxTextOverlay::GfxTextOverlay(
 	GfxDevicePtr_t pDevice,
 	vk::CommandPool graphicsCommandPool,
 	vk::Viewport viewport,
-	vk::Rect2D scissor,
-	vk::ShaderModule textVertShader,
-	vk::ShaderModule textFragShader)
+	vk::Rect2D scissor)
 	: overlayPipeline(nullptr)
 	, overlayRenderPass(nullptr)
 	, textOverlayCommandBuffers(nullptr)
@@ -136,7 +135,11 @@ GfxTextOverlay::GfxTextOverlay(
 	vk::WriteDescriptorSet writeSet(*overlaySet, 0, 0, vk::DescriptorType::eCombinedImageSampler, textDescriptor);
 	pDevice->GetDevice().updateDescriptorSets(writeSet, nullptr);
 
-	overlayPipeline = CreateOverlayPipeline(pDevice, viewport, scissor, textVertShader, textFragShader, *overlayLayout);
+	//Load Shaders
+	vk::raii::ShaderModule textVertShader = ShaderLoader::LoadModule("text.vert.spv", pDevice);
+	vk::raii::ShaderModule textFragShader = ShaderLoader::LoadModule("text.frag.spv", pDevice);
+
+	overlayPipeline = CreateOverlayPipeline(pDevice, viewport, scissor, *textVertShader, *textFragShader, *overlayLayout);
 
 	UpdateTextOverlay(*pDevice->GetDevice(), scissor.extent);
 }

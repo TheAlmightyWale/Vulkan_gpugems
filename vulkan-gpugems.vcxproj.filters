@@ -129,6 +129,9 @@
     <ClCompile Include="TerrainGenerator.cpp">
       <Filter>TerrainGeneration</Filter>
     </ClCompile>
+    <ClCompile Include="ShaderLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math.h">
@@ -214,6 +217,9 @@
     </ClInclude>
     <ClInclude Include="TerrainGenerator.h">
       <Filter>TerrainGeneration</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderLoader.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -16,9 +16,7 @@ public:
 		GfxDevicePtr_t pDevice,
 		vk::CommandPool graphicsCommandPool,
 		vk::Viewport viewport,
-		vk::Rect2D scissor,
-		vk::ShaderModule textVertShader,
-		vk::ShaderModule textFragShader);
+		vk::Rect2D scissor);
 
 	void RenderTextOverlay(GfxFrame const& frame, vk::Rect2D renderArea, vk::CommandBuffer const& commands);
 
