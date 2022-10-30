@@ -8,11 +8,13 @@
 #include "Logger.h"
 #include "Exceptions.h"
 
-//TODO move use of static model to a bucket system
 #include "StaticModel.h"
 #include "ImageLoader.h"
 
 #include "ShaderLoader.h"
+
+//TODO move out once rendering and terrain generation are separated
+#include "TerrainGenerator.h"
 
 //TODO wrap extensions and layers into configurable features?
 std::vector<const char*> const k_deviceExtensions{
@@ -32,7 +34,7 @@ struct FrameData {
 };
 
 constexpr uint32_t k_lightBindingId = 0;
-constexpr uint32_t k_transformBindingId = 0;
+constexpr uint32_t k_objectDataBindingId = 0;
 constexpr uint32_t k_textureBindingId = 0;
 
 constexpr uint32_t k_modelCount = 8;
@@ -62,6 +64,7 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_pGoochDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
 	, m_pObjectProcessor(pObjectProcessor)
+	, m_pTerrain(nullptr)
 {
 	m_pInstance = std::make_shared<GfxApiInstance>(applicationName, appVersion, k_engineName, k_engineVersion, k_vulkanVersion);
 
@@ -218,16 +221,16 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	SPDLOG_INFO("Constructing descriptor sets");
 
 	//Per object data
-	m_pDescriptorManager->SetBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
+	m_pDescriptorManager->AddBinding(k_objectDataBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
 	constexpr size_t k_objectDataBufferSize = sizeof(ObjectData) * k_maxModelTransforms + sizeof(CameraShaderData);//Only taking one camera into account
 	m_objectDataBuffer = m_pDevice->CreateBuffer(k_objectDataBufferSize, vk::BufferUsageFlagBits::eStorageBuffer);
 
 	//Per frame data
-	m_pDescriptorManager->SetBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
+	m_pDescriptorManager->AddBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
 	m_frameDataBuffer = m_pDevice->CreateBuffer(sizeof(FrameData), vk::BufferUsageFlagBits::eUniformBuffer);
 
 	//Per material data
-	m_pDescriptorManager->SetBinding(k_textureBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerMaterial, vk::DescriptorType::eCombinedImageSampler);
+	m_pDescriptorManager->AddBinding(k_textureBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerMaterial, vk::DescriptorType::eCombinedImageSampler);
 	//Load Texture image
 	ImagePtr_t pImage = ImageLoader::LoadTexture(*m_pDevice, "C:/Users/Jarryd/Projects/vulkan-gpugems/assets/fish.png");
 
@@ -271,14 +274,9 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	);
 	m_textureSampler = vk::raii::Sampler(m_pDevice->GetDevice(), samplerCreateInfo);
 	vk::DescriptorImageInfo textureDescriptor(*m_textureSampler, *m_textureImage.view, vk::ImageLayout::eShaderReadOnlyOptimal);
-	DescriptorInfo const* pPerMaterialInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerMaterial);
-	vk::WriteDescriptorSet samplerWrite(
-		*pPerMaterialInfo->set,
-		pPerMaterialInfo->bindingId,
-		0,
-		pPerMaterialInfo->type,
-		textureDescriptor
-	);
+	vk::WriteDescriptorSet samplerWrite = m_pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerMaterial, k_textureBindingId);
+	samplerWrite.setPImageInfo(&textureDescriptor);
+	samplerWrite.setDescriptorCount(1);
 	m_pDevice->GetDevice().updateDescriptorSets(samplerWrite, nullptr);
 
 	vk::Viewport viewport(0.0f, (float)height, (float)width, -(float)height, 0.0f, 1.0f);
@@ -286,8 +284,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	SPDLOG_INFO("Constructing Gooch Pipeline");
 	m_pGoochDescriptorManager = std::make_unique<GfxDescriptorManager>(m_pDevice);
 
-	m_pGoochDescriptorManager->SetBinding(k_transformBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
-	m_pGoochDescriptorManager->SetBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
+	m_pGoochDescriptorManager->AddBinding(k_objectDataBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
+	m_pGoochDescriptorManager->AddBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
 
 	vk::DescriptorSetLayout goochFrameLayout = m_pGoochDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
 	vk::DescriptorSetLayout goochModelLayout = m_pGoochDescriptorManager->GetLayout(DataUsageFrequency::ePerModel);
@@ -346,6 +344,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_timingQueryPool = m_pDevice->CreateQueryPool(k_queryPoolCount);
 
 	m_textOverlay = GfxTextOverlay(m_pDevice, *m_frames[0].commandPool, builder._viewport, builder._scissor);
+
+	m_pTerrain = std::make_shared<TerrainGenerator>(m_pDevice, viewport, builder._scissor, *m_renderPass);
 }
 
 GfxEngine::~GfxEngine()
@@ -398,49 +398,51 @@ void GfxEngine::Render()
 	UploadFrameDataToGpu();
 	UploadObjectDataToGpu();
 
-	frame.commandBuffers[0].bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		*m_pipeline.layout,
-		0,
-		{ m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
-		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
-		m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerMaterial)}, //Bind per model and material here as we are going bindless
-		nullptr
-	);
-
-	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
-
-	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_goochPipeline.pipeline);
-	for (uint32_t i = 0; i < k_modelCount; ++i)
-	{
-		StaticModelPtr_t const& pModel = m_models[i];
-		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
-		frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
-		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, i /*first instance*/);
-	}
-
-	frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
-	
-	for (uint32_t i = 0; i < k_cubeCount; ++i)
-	{
-		uint32_t modelIndex = i + k_modelCount;
-		StaticModelPtr_t const& pModel = m_models[modelIndex];
-		frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
-		frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
-		frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, modelIndex /*first instance*/);
-	}
-
-	frame.commandBuffers[0].endRenderPass();
-
-	frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 1);
+	//frame.commandBuffers[0].bindDescriptorSets(
+	//	vk::PipelineBindPoint::eGraphics,
+	//	*m_pipeline.layout,
+	//	0,
+	//	{ m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
+	//	m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
+	//	m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerMaterial)}, //Bind per model and material here as we are going bindless
+	//	nullptr
+	//);
+	//
+	//frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
+	//
+	//frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_goochPipeline.pipeline);
+	//for (uint32_t i = 0; i < k_modelCount; ++i)
+	//{
+	//	StaticModelPtr_t const& pModel = m_models[i];
+	//	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
+	//	frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
+	//	frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, i /*first instance*/);
+	//}
+	//
+	//frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
+	//
+	//for (uint32_t i = 0; i < k_cubeCount; ++i)
+	//{
+	//	uint32_t modelIndex = i + k_modelCount;
+	//	StaticModelPtr_t const& pModel = m_models[modelIndex];
+	//	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
+	//	frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
+	//	frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, modelIndex /*first instance*/);
+	//}
+	//
+	//frame.commandBuffers[0].endRenderPass();
+	//
+	//frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 1);
 	frame.commandBuffers[0].end();
 
 	m_textOverlay.RenderTextOverlay(frame, renderArea, *frame.commandBuffers[1]);
 
+	vk::CommandBuffer terrainCommandBuffer = m_pTerrain->Render(*m_renderPass, passBeginInfo, m_pDevice);
+
 	vk::PipelineStageFlags const submitStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
 	vk::Queue const queue = m_pDevice->GetGraphicsQueue();
-	std::vector<vk::CommandBuffer> submitted{ *frame.commandBuffers[0], *frame.commandBuffers[1] };
+	std::vector<vk::CommandBuffer> submitted{ *frame.commandBuffers[0], terrainCommandBuffer, *frame.commandBuffers[1] };
 	vk::SubmitInfo renderSubmitInfo(*frame.aquireImageSemaphore, submitStageMask, submitted, *frame.readyToPresentSemaphore);
 	queue.submit(renderSubmitInfo, *frame.renderCompleteFence);
 
@@ -480,18 +482,17 @@ size_t GfxEngine::PrepObjectDataForUpload()
 void GfxEngine::UploadObjectDataToGpu()
 {
 	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload();
-	DescriptorInfo const* pInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerModel);
-	m_pDevice->UploadBufferData(totalObjectDataBytesToUpload, 0, *m_objectDataBuffer.m_buffer, *pInfo->set, pInfo->bindingId, pInfo->type);
+	vk::WriteDescriptorSet writeDescriptor = m_pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerModel, k_objectDataBindingId);
+	m_pDevice->UploadBufferData(totalObjectDataBytesToUpload, 0, *m_objectDataBuffer.m_buffer, writeDescriptor);
 }
 
 void GfxEngine::UploadFrameDataToGpu()
 {
-	DescriptorInfo const* pInfo = m_pDescriptorManager->GetDescriptorInfo(DataUsageFrequency::ePerFrame);
-
 	FrameData data;
 	data.directionalLight = glm::vec4(k_light, 1.0f);
 	data.cameraPosition = glm::vec4(m_pCamera->GetPosition(), 1.0f);
 	m_frameDataBuffer.CopyToBuffer(&data, sizeof(FrameData), 0);
 
-	m_pDevice->UploadBufferData(sizeof(FrameData), 0, *m_frameDataBuffer.m_buffer, *pInfo->set, pInfo->bindingId, pInfo->type);
+	vk::WriteDescriptorSet writeDescriptor = m_pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerFrame, k_objectDataBindingId);
+	m_pDevice->UploadBufferData(sizeof(FrameData), 0, *m_frameDataBuffer.m_buffer, writeDescriptor);
 }

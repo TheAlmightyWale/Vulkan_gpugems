@@ -11,6 +11,9 @@
 #include "GfxDescriptorManager.h"
 #include "Camera.h"
 
+//TODO move out once generation and rendering are split up
+#include "TerrainGenerator.h"
+
 //TODO move out object managment to scene loading
 #include "ObjectProcessor.h"
 
@@ -76,6 +79,9 @@ private:
 	GfxBuffer m_frameDataBuffer;
 	GfxBuffer m_objectDataBuffer;
 	std::shared_ptr<ObjectProcessor> m_pObjectProcessor;
+
+	//Terrain
+	std::shared_ptr<TerrainGenerator> m_pTerrain;
 
 	//Perf timers
 	vk::raii::QueryPool m_timingQueryPool;

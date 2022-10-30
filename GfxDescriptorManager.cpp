@@ -2,9 +2,11 @@
 #include "GfxDevice.h"
 #include "Logger.h"
 
+#include <algorithm>
+
 GfxDescriptorManager::GfxDescriptorManager(GfxDevicePtr_t pDevice)
-	: m_descriptorSlots()
-	, m_descriptorPool(nullptr)
+	: m_descriptorPool(nullptr)
+	, m_descriptorSlots()
 	, m_pGfxDevice(pDevice)
 {
 
@@ -26,20 +28,23 @@ GfxDescriptorManager::GfxDescriptorManager(GfxDevicePtr_t pDevice)
 	};
 
 	vk::DescriptorPoolCreateInfo poolCreateInfo(
-		{},
+		{vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet},
 		usageFrequencies.size(),
 		poolSizes
 	);
 
 	m_descriptorPool = vk::raii::DescriptorPool(m_pGfxDevice->GetDevice(), poolCreateInfo);
+
+	//Pre-initialize all descriptor slots
+	for (DataUsageFrequency freq : usageFrequencies)
+	{
+		m_descriptorSlots.emplace(std::make_pair(freq, DescriptorInfo()));
+	}
+
 }
 
-//TODO descriptorManager should be paired with a descriptor builder, which you add desired bindings before inputting that to a pipeline
-	// descriptorManager should probably just be interested in managing updates to descriptorSet information, such as getting locations of certain bindings etc
-void GfxDescriptorManager::SetBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, vk::DescriptorType type)
+void GfxDescriptorManager::AddBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, vk::DescriptorType type)
 {
-	DescriptorInfo info;
-
 	vk::DescriptorSetLayoutBinding dslBinding(
 		bindingId,
 		type,
@@ -48,24 +53,24 @@ void GfxDescriptorManager::SetBinding(uint32_t bindingId, vk::ShaderStageFlagBit
 		nullptr
 	);
 
+	DescriptorInfo& info = m_descriptorSlots.at(usageFrequency);
+	info.bindings.push_back(dslBinding);
+
+	//Sort every time for now
+	std::sort(info.bindings.begin(), info.bindings.end(),
+		[](vk::DescriptorSetLayoutBinding& a, vk::DescriptorSetLayoutBinding& b)
+		{
+			return a.binding < b.binding;
+		});
+
+	//Re-create set and layout every time for now
 	//multiple bindings per descriptorSetLayout
-	vk::DescriptorSetLayoutCreateInfo dslCreateInfo({}, dslBinding);
+	vk::DescriptorSetLayoutCreateInfo dslCreateInfo({}, info.bindings);
 	info.layout = std::move(vk::raii::DescriptorSetLayout(m_pGfxDevice->GetDevice(), dslCreateInfo));
 
 	//One layout per set, but we can allocate multiple sets at once
 	vk::DescriptorSetAllocateInfo dsaInfo(*m_descriptorPool, *info.layout);
 	info.set = std::move(m_pGfxDevice->GetDevice().allocateDescriptorSets(dsaInfo).front());
-	info.bindingId = bindingId;
-	info.type = type;
-	
-	if (m_descriptorSlots.contains(usageFrequency))
-	{
-		m_descriptorSlots.at(usageFrequency) = std::move(info);
-	}
-	else
-	{
-		m_descriptorSlots.emplace(std::make_pair(usageFrequency, std::move(info)));
-	}
 }
 
 vk::DescriptorSet GfxDescriptorManager::GetDescriptor(DataUsageFrequency usageFrequency) const
@@ -81,4 +86,20 @@ vk::DescriptorSetLayout GfxDescriptorManager::GetLayout(DataUsageFrequency usage
 DescriptorInfo const*  GfxDescriptorManager::GetDescriptorInfo(DataUsageFrequency usageFrequency) const
 {
 	return &m_descriptorSlots.at(usageFrequency);
+}
+
+vk::WriteDescriptorSet GfxDescriptorManager::GetWriteDescriptor(DataUsageFrequency usageFrequency, uint32_t bindingId) const
+{
+	DescriptorInfo const& info = m_descriptorSlots.at(usageFrequency);
+	vk::DescriptorSetLayoutBinding const& binding = info.bindings.at(bindingId);
+
+	vk::WriteDescriptorSet writeDescriptor(
+		*info.set,
+		binding.binding,
+		0,
+		binding.descriptorType,
+		nullptr, nullptr, nullptr, nullptr //Undefined, for the caller to fill out for thier purposes
+	);
+
+	return writeDescriptor;
 }

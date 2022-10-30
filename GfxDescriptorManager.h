@@ -13,13 +13,12 @@ struct DescriptorInfo {
 	DescriptorInfo() noexcept
 		: set(nullptr)
 		, layout(nullptr)
-		, bindingId(0)
-		, type(vk::DescriptorType::eStorageBuffer) //Good a default as any
+		, bindings()
 	{}
 	vk::raii::DescriptorSet set;
 	vk::raii::DescriptorSetLayout layout;
-	uint32_t bindingId;
-	vk::DescriptorType type;
+	//Assume compact vector where position in array matches binding id
+	std::vector<vk::DescriptorSetLayoutBinding> bindings;
 };
 
 using DescriptorSlotMap = std::unordered_map<DataUsageFrequency, DescriptorInfo>;
@@ -33,15 +32,16 @@ class GfxDescriptorManager
 public:
 	GfxDescriptorManager(GfxDevicePtr_t pDevice);
 
-	void SetBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, vk::DescriptorType type);
+	void AddBinding(uint32_t bindingId, vk::ShaderStageFlagBits bindToStage, DataUsageFrequency usageFrequency, vk::DescriptorType type);
 
 	vk::DescriptorSet GetDescriptor(DataUsageFrequency usageFrequency) const;
 	vk::DescriptorSetLayout GetLayout(DataUsageFrequency usageFrequency) const;
 	DescriptorInfo const* GetDescriptorInfo(DataUsageFrequency usageFrequency) const;
+	vk::WriteDescriptorSet GetWriteDescriptor(DataUsageFrequency usageFrequency, uint32_t bindingId) const;
 
 private:
-	DescriptorSlotMap m_descriptorSlots;
 	vk::raii::DescriptorPool m_descriptorPool;
+	DescriptorSlotMap m_descriptorSlots;
 	GfxDevicePtr_t m_pGfxDevice;
 };
 
