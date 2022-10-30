@@ -1,0 +1,18 @@
+#version 450
+
+//Run compute shader in batches of 256
+layout (local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer DensityInput {
+	mat4 cameraTransform;
+	vec4 noise[];
+} densityInput;
+
+layout(std430, set = 0, binding = 1) buffer DensityOutput{
+	float oValues[];
+} densityOutput;
+
+void main()
+{
+	densityOutput.oValues[gl_LocalInvocationID.x] = gl_LocalInvocationID.x % 256;
+}

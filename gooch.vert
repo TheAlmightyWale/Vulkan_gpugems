@@ -12,7 +12,7 @@ struct CameraData {
 	mat4 viewProj;
 };
 
-//Packing of a buffer occurs along 16 byte alignment with std140
+//Packing of a buffer occurs along 16 byte alignment with std140, can be packed tighter with std430
 // generally avoid using vec3 and std430
 layout(std430, set = 1, binding = 0) readonly buffer ObjectBuffer {
 	CameraData camera;
