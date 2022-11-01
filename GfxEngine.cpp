@@ -375,7 +375,7 @@ void GfxEngine::Render()
 	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6; //timestamp period changes to ns e+6 takes us to ms
 	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6;
 
-	auto [result, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
+	auto [acquireResult, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
 
 	//TODO remove after finished prototyping bindless
 	m_pDevice->GetDevice().waitIdle();
@@ -443,11 +443,22 @@ void GfxEngine::Render()
 
 	vk::Queue const queue = m_pDevice->GetGraphicsQueue();
 	std::vector<vk::CommandBuffer> submitted{ *frame.commandBuffers[0], terrainCommandBuffer, *frame.commandBuffers[1] };
+
+	if (m_pTerrain->ReadyToRender())
+	{
+		submitted.push_back(m_pTerrain->RenderTerrain(*m_renderPass, passBeginInfo, m_pDevice, *m_pCamera));
+	}
+
 	vk::SubmitInfo renderSubmitInfo(*frame.aquireImageSemaphore, submitStageMask, submitted, *frame.readyToPresentSemaphore);
 	queue.submit(renderSubmitInfo, *frame.renderCompleteFence);
 
 	vk::PresentInfoKHR presentInfo(*frame.readyToPresentSemaphore, *m_swapChain.m_swapchain, imageIndex);
 	queue.presentKHR(presentInfo);//TODO handle different Success results
+
+	//Temp for density checking
+	queue.waitIdle();
+	std::vector<float> densityResult = m_pTerrain->GetDensityOutput();
+	m_pTerrain->GenerateVertexBuffer(densityResult);
 
 	//Perf updates
 	double frameCpuEndTime = glfwGetTime() * 1000;

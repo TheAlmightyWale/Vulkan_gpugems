@@ -1,7 +1,7 @@
 #include "InputManager.h"
 #include "Exceptions.h"
 
-void ProcessButtonState(int glfwButtonAction, ButtonState& const processedState) noexcept
+void ProcessButtonState(int glfwButtonAction, ButtonState& processedState) noexcept
 {
 	if (glfwButtonAction == GLFW_PRESS)
 	{

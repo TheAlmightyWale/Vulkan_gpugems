@@ -218,8 +218,14 @@
     <ClInclude Include="TerrainGenerator.h">
       <Filter>TerrainGeneration</Filter>
     </ClInclude>
+    <ClInclude Include="TerrainVertex.h">
+      <Filter>TerrainGeneration</Filter>
+    </ClInclude>
     <ClInclude Include="ShaderLoader.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MarchingCubeTables.h">
+      <Filter>TerrainGeneration</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

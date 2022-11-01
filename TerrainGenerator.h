@@ -9,28 +9,52 @@
 
 struct Mesh;
 struct GfxPipeline;
+class Camera;
+
+struct Edge
+{
+	uint8_t a;
+	uint8_t b;
+};
+
+//Wind from bottom left point on plane clockwise. Then top left point on plane clockwise then middle (vertical) edges of cube
+static Edge k_EdgeToVertexLookupTable[12] =
+{
+	{0,1},
+	{1,2},
+	{2,3},
+	{3,0},
+	{4,5},
+	{5,6},
+	{6,7},
+	{7,4},
+	{4,0},
+	{5,1},
+	{6,2},
+	{7,3}
+};
 
 struct Cell
 {
 	union {
-		TerrainVertex TerrainVertexs[8];
+		TerrainVertex TerrainVertices[8];
 		struct {
-			//Front bottom left
-			TerrainVertex fbl;
-			//Front top left
-			TerrainVertex ftl;
-			//Front top right
-			TerrainVertex ftr;
-			//Front bottom right
-			TerrainVertex fbr;
 			//Back bottom left
 			TerrainVertex bbl;
+			//Back bottom right
+			TerrainVertex bbr;
+			//Front bottom right
+			TerrainVertex fbr;
+			//Front bottom left
+			TerrainVertex fbl;
 			//Back top left
 			TerrainVertex btl;
 			//Back top right
 			TerrainVertex btr;
-			//Back bottom right
-			TerrainVertex bbr;
+			//Front top right
+			TerrainVertex ftr;
+			//Front top left
+			TerrainVertex ftl;
 		};
 
 	};
@@ -44,6 +68,12 @@ public:
 	//TODO Whats best practices for renderpasses? I'm assuming we want to minimize starting and ending passes
 	vk::CommandBuffer Render(vk::RenderPass renderPass, vk::RenderPassBeginInfo passBeginInfo, GfxDevicePtr_t pDevice);
 
+	void GenerateVertexBuffer(std::vector<float> const& lookUpIndices);
+	vk::CommandBuffer RenderTerrain(vk::RenderPass renderPass, vk::RenderPassBeginInfo passBeginInfo, GfxDevicePtr_t pDevice, Camera const& pCamera);
+	std::vector<float> GetDensityOutput();
+
+	bool ReadyToRender();
+
 private:
 	std::vector<Cell> m_grid;
 	std::shared_ptr<GfxBuffer> m_pInputBuffer;
@@ -53,8 +83,13 @@ private:
 	std::unique_ptr<GfxPipeline> m_pPipeline;
 	vk::raii::CommandPool m_graphicsCommandPool;
 	vk::raii::CommandBuffer m_renderCommandBuffer;
+	std::vector<TerrainVertex> m_vertices;
+	//Temp
+	std::shared_ptr<GfxBuffer> m_pVertexBuffer;
+
 
 	//Compute components
 	std::unique_ptr<GfxPipeline> m_pComputePipline;
 	GfxDescriptorManager m_computeDescriptors;
+	vk::raii::CommandBuffer m_generateCommandBuffer;
 };
