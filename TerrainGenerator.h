@@ -65,11 +65,10 @@ class TerrainGenerator
 public:
 	TerrainGenerator(GfxDevicePtr_t pDevice, vk::Viewport viewport, vk::Rect2D scissor, vk::RenderPass renderPass);
 
-	//TODO Whats best practices for renderpasses? I'm assuming we want to minimize starting and ending passes
-	vk::CommandBuffer Render(vk::RenderPass renderPass, vk::RenderPassBeginInfo passBeginInfo, GfxDevicePtr_t pDevice);
+	vk::CommandBuffer Render(GfxDevicePtr_t pDevice);
+	vk::CommandBuffer RenderTerrain(vk::CommandBufferInheritanceInfo const* pInheritanceInfo, GfxDevicePtr_t pDevice, Camera const& camera);
 
 	void GenerateVertexBuffer(std::vector<float> const& lookUpIndices);
-	vk::CommandBuffer RenderTerrain(vk::RenderPass renderPass, vk::RenderPassBeginInfo passBeginInfo, GfxDevicePtr_t pDevice, Camera const& pCamera);
 	std::vector<float> GetDensityOutput();
 
 	bool ReadyToRender();

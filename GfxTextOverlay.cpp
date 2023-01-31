@@ -11,7 +11,6 @@
 GfxTextOverlay::GfxTextOverlay()
 	: overlayPipeline(nullptr)
 	, overlayRenderPass(nullptr)
-	, textOverlayCommandBuffers(nullptr)
 	, textImage()
 	, sampler(nullptr)
 	, descriptorPool(nullptr)
@@ -20,6 +19,8 @@ GfxTextOverlay::GfxTextOverlay()
 	, overlayLayout(nullptr)
 	, overlayVertexBuffer()
 	, overlayFrameBuffers({ nullptr, nullptr })
+	, commandPool(nullptr)
+	, commandBuffer(nullptr)
 {}
 
 GfxTextOverlay::GfxTextOverlay(
@@ -29,7 +30,6 @@ GfxTextOverlay::GfxTextOverlay(
 	vk::Rect2D scissor)
 	: overlayPipeline(nullptr)
 	, overlayRenderPass(nullptr)
-	, textOverlayCommandBuffers(nullptr)
 	, textImage()
 	, sampler(nullptr)
 	, descriptorPool(nullptr)
@@ -38,6 +38,8 @@ GfxTextOverlay::GfxTextOverlay(
 	, overlayLayout(nullptr)
 	, overlayVertexBuffer()
 	, overlayFrameBuffers({nullptr, nullptr})
+	, commandPool(nullptr)
+	, commandBuffer(nullptr)
 {
 	SPDLOG_INFO("Creating Text Overlay");
 
@@ -48,7 +50,8 @@ GfxTextOverlay::GfxTextOverlay(
 	static uint8_t font24Pixels[k_fontWidth][k_fontHeight];
 	stb_font_consolas_24_latin1(stbFontData, font24Pixels, k_fontHeight);
 
-	textOverlayCommandBuffers = std::move(pDevice->CreateCommandBuffers(graphicsCommandPool, 2));
+	commandPool = pDevice->CreateGraphicsCommandPool();
+	commandBuffer = std::move(pDevice->CreatePrimaryCommandBuffers(*commandPool, 1).front());
 
 	overlayVertexBuffer = pDevice->CreateBuffer(k_max_char_count * sizeof(glm::vec4), vk::BufferUsageFlagBits::eVertexBuffer);
 
@@ -144,32 +147,34 @@ GfxTextOverlay::GfxTextOverlay(
 	UpdateTextOverlay(*pDevice->GetDevice(), scissor.extent);
 }
 
-void GfxTextOverlay::RenderTextOverlay(GfxFrame const& frame, vk::Rect2D renderArea, vk::CommandBuffer const& commands)
+vk::CommandBuffer GfxTextOverlay::RenderTextOverlay(GfxFrame const& frame, vk::Rect2D renderArea)
 {
+	commandPool.reset();
 	vk::CommandBufferBeginInfo const cbBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-	commands.begin(cbBeginInfo);
+	commandBuffer.begin(cbBeginInfo);
 
 	vk::ClearValue clearValues[2] =
 	{
-		vk::ClearValue(), //TODO why was one of these uninitialized?
+		vk::ClearValue(),
 		vk::ClearColorValue()
 	};
 
 	vk::RenderPassBeginInfo const beginInfo(*overlayRenderPass, *frame.frameBuffer, renderArea, clearValues);
-	commands.beginRenderPass(beginInfo, vk::SubpassContents::eInline);
-	commands.bindPipeline(vk::PipelineBindPoint::eGraphics, *overlayPipeline);
-	commands.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *overlayLayout, 0, *overlaySet, nullptr);
+	commandBuffer.beginRenderPass(beginInfo, vk::SubpassContents::eInline);
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *overlayPipeline);
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *overlayLayout, 0, *overlaySet, nullptr);
 
-	commands.bindVertexBuffers(0, *overlayVertexBuffer.m_buffer, { 0 });
+	commandBuffer.bindVertexBuffers(0, *overlayVertexBuffer.m_buffer, { 0 });
 
 	for (uint32_t i = 0; i < overlayText.size(); ++i)
 	{
-		commands.draw(4, 1, i * 4, 0);
+		commandBuffer.draw(4, 1, i * 4, 0);
 	}
 
-	commands.endRenderPass();
-	commands.end();
+	commandBuffer.endRenderPass();
+	commandBuffer.end();
 
+	return *commandBuffer;
 }
 
 void GfxTextOverlay::UpdateTextOverlay(vk::Device device, vk::Extent2D frameBufferDim)

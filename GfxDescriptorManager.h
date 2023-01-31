@@ -39,6 +39,8 @@ public:
 	DescriptorInfo const* GetDescriptorInfo(DataUsageFrequency usageFrequency) const;
 	vk::WriteDescriptorSet GetWriteDescriptor(DataUsageFrequency usageFrequency, uint32_t bindingId) const;
 
+	std::vector<vk::DescriptorSet> GetDescriptors() const;
+
 private:
 	vk::raii::DescriptorPool m_descriptorPool;
 	DescriptorSlotMap m_descriptorSlots;

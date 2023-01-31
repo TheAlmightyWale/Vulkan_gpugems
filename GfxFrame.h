@@ -9,6 +9,7 @@ struct GfxFrame {
 		, renderCompleteFence(nullptr)
 		, commandPool(nullptr)
 		, commandBuffers(nullptr)
+		, secondaryCommandBuffers(nullptr)
 	{}
 
 	vk::raii::Framebuffer frameBuffer;
@@ -19,4 +20,5 @@ struct GfxFrame {
 
 	vk::raii::CommandPool commandPool;
 	vk::raii::CommandBuffers commandBuffers;
+	vk::raii::CommandBuffers secondaryCommandBuffers;
 };

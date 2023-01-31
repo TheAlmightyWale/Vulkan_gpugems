@@ -250,7 +250,7 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t 
 
 	vk::raii::SwapchainKHR swapChain(*m_pDevice.get(), createInfo, nullptr /*allocator*/);
 
-	std::vector<VkImage> swapChainImages = swapChain.getImages();
+	std::vector<vk::Image> swapChainImages = swapChain.getImages();
 	
 	GfxSwapchain gfxSwapchain;
 	gfxSwapchain.m_format = format;
@@ -280,7 +280,7 @@ GfxSwapchain GfxDevice::CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t 
 		//TODO split out transfer / transition work into bulk worker queue
 		//transition image to presentKHR
 		vk::raii::CommandPool commandPool = CreateGraphicsCommandPool();
-		vk::raii::CommandBuffer transitionBuffer = std::move(CreateCommandBuffers(*commandPool, 1).front());
+		vk::raii::CommandBuffer transitionBuffer = std::move(CreatePrimaryCommandBuffers(*commandPool, 1).front());
 		vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 		transitionBuffer.begin(beginInfo);
 		vk::ImageMemoryBarrier transitionBarrier = CreateImageTransition(
@@ -467,9 +467,15 @@ vk::raii::CommandPool GfxDevice::CreateGraphicsCommandPool()
 	return std::move(vk::raii::CommandPool(*m_pDevice.get(), createInfo));
 }
 
-vk::raii::CommandBuffers GfxDevice::CreateCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers)
+vk::raii::CommandBuffers GfxDevice::CreatePrimaryCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers)
 {
-	vk::CommandBufferAllocateInfo allocateInfo(commandPool, vk::CommandBufferLevel::ePrimary, numBuffers);
+	vk::CommandBufferAllocateInfo const allocateInfo(commandPool, vk::CommandBufferLevel::ePrimary, numBuffers);
+	return std::move(vk::raii::CommandBuffers(*m_pDevice.get(), allocateInfo));
+}
+
+vk::raii::CommandBuffers GfxDevice::CreateSecondaryCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers)
+{
+	vk::CommandBufferAllocateInfo const allocateInfo(commandPool, vk::CommandBufferLevel::eSecondary, numBuffers);
 	return std::move(vk::raii::CommandBuffers(*m_pDevice.get(), allocateInfo));
 }
 
@@ -483,7 +489,7 @@ void GfxDevice::UploadBufferData(size_t bytesToUpload, size_t bufferOffset, vk::
 
 void GfxDevice::UploadImageData(vk::CommandPool commandPool, vk::Queue submitQueue, GfxImage const& image, GfxBuffer const& imageData)
 {
-	vk::raii::CommandBuffer copyCommands = std::move(CreateCommandBuffers(commandPool, 1).front());
+	vk::raii::CommandBuffer copyCommands = std::move(CreatePrimaryCommandBuffers(commandPool, 1).front());
 	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	copyCommands.begin(beginInfo);
 

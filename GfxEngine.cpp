@@ -5,6 +5,7 @@
 #include "GfxPipeline.h"
 #include "GfxPipelineBuilder.h"
 #include "GfxSwapchain.h"
+#include "GfxStaticModelDrawer.h"
 #include "Logger.h"
 #include "Exceptions.h"
 
@@ -57,10 +58,12 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	, m_textureImage()
 	, m_textureSampler(nullptr)
 	, m_pCamera(std::make_shared<Camera>(pWindow->GetWindowWidth(), pWindow->GetWindowHeight()))
+	, m_numFramesRendered(0)
 	, m_frameDataBuffer()
 	, m_objectDataBuffer()
-	, m_numFramesRendered(0)
 	, m_pDescriptorManager(nullptr)
+	, m_goochObjectDataBuffer()
+	, m_goochFrameDataBuffer()
 	, m_pGoochDescriptorManager(nullptr)
 	, m_timingQueryPool(nullptr)
 	, m_pObjectProcessor(pObjectProcessor)
@@ -184,7 +187,8 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 		m_frames[i].aquireImageSemaphore = m_pDevice->CreateVkSemaphore();
 		m_frames[i].readyToPresentSemaphore = m_pDevice->CreateVkSemaphore();
 		m_frames[i].commandPool = m_pDevice->CreateGraphicsCommandPool();
-		m_frames[i].commandBuffers = std::move(m_pDevice->CreateCommandBuffers(*m_frames[i].commandPool, 2/*num buffers*/));
+		m_frames[i].commandBuffers = std::move(m_pDevice->CreatePrimaryCommandBuffers(*m_frames[i].commandPool, 1/*num buffers*/));
+		m_frames[i].secondaryCommandBuffers = std::move(m_pDevice->CreateSecondaryCommandBuffers(*m_frames[i].commandPool, 1));
 		m_frames[i].renderCompleteFence = m_pDevice->CreateFence();
 	}
 
@@ -285,7 +289,10 @@ GfxEngine::GfxEngine(std::string const& applicationName, uint32_t appVersion, Wi
 	m_pGoochDescriptorManager = std::make_unique<GfxDescriptorManager>(m_pDevice);
 
 	m_pGoochDescriptorManager->AddBinding(k_objectDataBindingId, vk::ShaderStageFlagBits::eVertex, DataUsageFrequency::ePerModel, vk::DescriptorType::eStorageBuffer);
+	m_goochObjectDataBuffer = m_pDevice->CreateBuffer(k_objectDataBufferSize, vk::BufferUsageFlagBits::eStorageBuffer);
+	
 	m_pGoochDescriptorManager->AddBinding(k_lightBindingId, vk::ShaderStageFlagBits::eFragment, DataUsageFrequency::ePerFrame, vk::DescriptorType::eUniformBuffer);
+	m_goochFrameDataBuffer = m_pDevice->CreateBuffer(sizeof(FrameData), vk::BufferUsageFlagBits::eUniformBuffer);
 
 	vk::DescriptorSetLayout goochFrameLayout = m_pGoochDescriptorManager->GetLayout(DataUsageFrequency::ePerFrame);
 	vk::DescriptorSetLayout goochModelLayout = m_pGoochDescriptorManager->GetLayout(DataUsageFrequency::ePerModel);
@@ -363,29 +370,15 @@ void GfxEngine::Render()
 	m_pDevice->GetDevice().waitForFences(*frame.renderCompleteFence, VK_TRUE /*wait all*/, k_renderCompleteTimeout_ns);
 	m_pDevice->GetDevice().resetFences(*frame.renderCompleteFence);
 
-	//TODO verify timing results somehow?
-	//Grab previous frame perf results
-	auto [queryResult, resultData] = m_timingQueryPool.getResults<double>(
-		0/*first query*/,
-		2 /*queryCount*/,
-		sizeof(uint64_t) * 2/*assuming 64 bit per result we want*/,
-		sizeof(uint64_t),
-		vk::QueryResultFlagBits::e64);
-
-	double frameGpuBeginTime = resultData[0] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6; //timestamp period changes to ns e+6 takes us to ms
-	double frameGpuEndTime = resultData[1] * m_pDevice->GetProperties().limits.timestampPeriod * 1e+6;
-
 	auto [acquireResult, imageIndex] = m_swapChain.m_swapchain.acquireNextImage(k_aquireTimeout_ns, *frame.aquireImageSemaphore);//TODO: check and handle failed aquisition
 
 	//TODO remove after finished prototyping bindless
 	m_pDevice->GetDevice().waitIdle();
 
 	frame.commandPool.reset();
-	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-	frame.commandBuffers[0].begin(beginInfo);
 
-	frame.commandBuffers[0].resetQueryPool(*m_timingQueryPool, 0, k_queryPoolCount);
-	frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, *m_timingQueryPool, 0);
+	std::vector<vk::CommandBuffer> submitted;
+	submitted.push_back(m_pTerrain->Render(m_pDevice));
 
 	vk::ClearColorValue const k_clearColor(std::array<float, 4>{48.0f / 2550.f, 10.0f / 255.0f, 36.0f / 255.0f, 1.0f});
 	vk::ClearDepthStencilValue const k_depthClear(1.0f, 0); //1.0 is max depth
@@ -395,60 +388,40 @@ void GfxEngine::Render()
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
 	//Copy data to gpu before binding descriptor set
-	UploadFrameDataToGpu();
-	UploadObjectDataToGpu();
+	UploadFrameDataToGpu(m_pDescriptorManager);
+	UploadObjectDataToGpu(m_pDescriptorManager);
 
-	//frame.commandBuffers[0].bindDescriptorSets(
-	//	vk::PipelineBindPoint::eGraphics,
-	//	*m_pipeline.layout,
-	//	0,
-	//	{ m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerFrame),
-	//	m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerModel),
-	//	m_pDescriptorManager->GetDescriptor(DataUsageFrequency::ePerMaterial)}, //Bind per model and material here as we are going bindless
-	//	nullptr
-	//);
-	//
-	//frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
-	//
-	//frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_goochPipeline.pipeline);
-	//for (uint32_t i = 0; i < k_modelCount; ++i)
-	//{
-	//	StaticModelPtr_t const& pModel = m_models[i];
-	//	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
-	//	frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
-	//	frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, i /*first instance*/);
-	//}
-	//
-	//frame.commandBuffers[0].bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pipeline.pipeline);
-	//
-	//for (uint32_t i = 0; i < k_cubeCount; ++i)
-	//{
-	//	uint32_t modelIndex = i + k_modelCount;
-	//	StaticModelPtr_t const& pModel = m_models[modelIndex];
-	//	frame.commandBuffers[0].bindVertexBuffers(0/*first binding*/, *pModel->GetVertexBuffer().m_buffer, { 0 } /*offset*/);
-	//	frame.commandBuffers[0].bindIndexBuffer(*pModel->GetIndexBuffer().m_buffer, 0/*offset*/, vk::IndexType::eUint32);
-	//	frame.commandBuffers[0].drawIndexed(pModel->GetIndexBuffer().m_dataSize / sizeof(uint32_t), 1/*instance count*/, 0, 0, modelIndex /*first instance*/);
-	//}
-	//
-	//frame.commandBuffers[0].endRenderPass();
-	//
-	//frame.commandBuffers[0].writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *m_timingQueryPool, 1);
+	UploadFrameDataToGpu(m_pGoochDescriptorManager);
+	UploadObjectDataToGpu(m_pGoochDescriptorManager);
+
+	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+	frame.commandBuffers[0].begin(beginInfo);
+
+	frame.commandBuffers[0].beginRenderPass(passBeginInfo, vk::SubpassContents::eSecondaryCommandBuffers);
+	
+	//Gather secondary command buffers to execute
+	vk::CommandBufferInheritanceInfo const inheritInfo(*m_renderPass, 0 /*subpass*/, *frame.frameBuffer);
+	vk::CommandBuffer modelCommandBuffer = *frame.secondaryCommandBuffers[0];
+	modelCommandBuffer.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritInfo});
+	GfxStaticModelDrawer::DrawObjects({ m_models.begin(), m_models.begin() + k_modelCount }, m_goochPipeline, modelCommandBuffer, m_pGoochDescriptorManager);
+	GfxStaticModelDrawer::DrawObjects({ m_models.begin() + k_modelCount, m_models.end() }, m_pipeline, modelCommandBuffer, m_pDescriptorManager);
+	modelCommandBuffer.end();
+
+	frame.commandBuffers[0].executeCommands(modelCommandBuffer);
+	if (m_pTerrain->ReadyToRender())
+	{
+		frame.commandBuffers[0].executeCommands(m_pTerrain->RenderTerrain(&inheritInfo, m_pDevice, *m_pCamera));
+	}
+		
+	frame.commandBuffers[0].endRenderPass();
 	frame.commandBuffers[0].end();
 
-	m_textOverlay.RenderTextOverlay(frame, renderArea, *frame.commandBuffers[1]);
-
-	vk::CommandBuffer terrainCommandBuffer = m_pTerrain->Render(*m_renderPass, passBeginInfo, m_pDevice);
+	submitted.push_back(*frame.commandBuffers[0]);
+	submitted.push_back(m_textOverlay.RenderTextOverlay(frame, renderArea));
 
 	vk::PipelineStageFlags const submitStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
 	vk::Queue const queue = m_pDevice->GetGraphicsQueue();
-	std::vector<vk::CommandBuffer> submitted{ *frame.commandBuffers[0], terrainCommandBuffer, *frame.commandBuffers[1] };
-
-	if (m_pTerrain->ReadyToRender())
-	{
-		submitted.push_back(m_pTerrain->RenderTerrain(*m_renderPass, passBeginInfo, m_pDevice, *m_pCamera));
-	}
-
 	vk::SubmitInfo renderSubmitInfo(*frame.aquireImageSemaphore, submitStageMask, submitted, *frame.readyToPresentSemaphore);
 	queue.submit(renderSubmitInfo, *frame.renderCompleteFence);
 
@@ -463,7 +436,7 @@ void GfxEngine::Render()
 	//Perf updates
 	double frameCpuEndTime = glfwGetTime() * 1000;
 
-	m_pWindow->SetTitle(std::format("cpu: {0:.3f}ms gpu: {1:.3f}ms", frameCpuEndTime - frameCpuBeginTime, frameGpuEndTime - frameGpuBeginTime));
+	m_pWindow->SetTitle(std::format("cpu: {0:.3f}ms", frameCpuEndTime - frameCpuBeginTime));
 
 	m_numFramesRendered++;
 }
@@ -473,37 +446,43 @@ GfxFrame& GfxEngine::GetCurrentFrame()
 	return m_frames[m_numFramesRendered % k_numFramesBuffered];
 }
 
+size_t GfxEngine::PrepModelData(std::span<StaticModelPtr_t> models, size_t writeOffset)
+{
+	for (auto const& model : models)
+	{
+		writeOffset = m_objectDataBuffer.CopyToBuffer(&model->GetTransform(), sizeof(ObjectData), writeOffset);
+	}
+
+	return writeOffset;
+}
+
 size_t GfxEngine::PrepObjectDataForUpload()
 {
 	//First upload Camera data
 	size_t writeOffset = m_objectDataBuffer.CopyToBuffer(&m_pCamera->GetViewProj(), sizeof(CameraShaderData), 0);
 
 	//Upload Model transforms at the start of every frame
-	for (uint32_t i = 0; i < m_models.size(); ++i)
-	{
-		//TODO exoise ObjectData contiguous store somehow, so we don't need to iterate through poiunter redirectes
-		writeOffset = m_objectDataBuffer.CopyToBuffer(&m_models.at(i)->GetTransform(), sizeof(ObjectData), writeOffset);
-	}
+	writeOffset = PrepModelData({ m_models.begin(), m_models.end() }, writeOffset);
 
 	//TODO Currently have no way of knowing where the starting offset of copyToBuffer is
 	// which will be needed once this buffer copy gets shared between more than just this function
 	return writeOffset;
 }
 
-void GfxEngine::UploadObjectDataToGpu()
+void GfxEngine::UploadObjectDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager)
 {
 	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload();
-	vk::WriteDescriptorSet writeDescriptor = m_pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerModel, k_objectDataBindingId);
+	vk::WriteDescriptorSet writeDescriptor = pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerModel, k_objectDataBindingId);
 	m_pDevice->UploadBufferData(totalObjectDataBytesToUpload, 0, *m_objectDataBuffer.m_buffer, writeDescriptor);
 }
 
-void GfxEngine::UploadFrameDataToGpu()
+void GfxEngine::UploadFrameDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager)
 {
 	FrameData data;
 	data.directionalLight = glm::vec4(k_light, 1.0f);
 	data.cameraPosition = glm::vec4(m_pCamera->GetPosition(), 1.0f);
 	m_frameDataBuffer.CopyToBuffer(&data, sizeof(FrameData), 0);
 
-	vk::WriteDescriptorSet writeDescriptor = m_pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerFrame, k_objectDataBindingId);
+	vk::WriteDescriptorSet writeDescriptor = pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerFrame, k_objectDataBindingId);
 	m_pDevice->UploadBufferData(sizeof(FrameData), 0, *m_frameDataBuffer.m_buffer, writeDescriptor);
 }

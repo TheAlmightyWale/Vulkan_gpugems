@@ -103,3 +103,18 @@ vk::WriteDescriptorSet GfxDescriptorManager::GetWriteDescriptor(DataUsageFrequen
 
 	return writeDescriptor;
 }
+
+std::vector<vk::DescriptorSet> GfxDescriptorManager::GetDescriptors() const
+{
+	std::vector<vk::DescriptorSet> descriptors;
+	//Copy only initialized descriptor sets out
+	for (auto const& descriptorPair : m_descriptorSlots)
+	{
+		vk::DescriptorSet set = *descriptorPair.second.set;
+		if (set)
+		{
+			descriptors.push_back(set);
+		}
+	}
+	return descriptors;
+}

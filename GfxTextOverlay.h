@@ -18,7 +18,7 @@ public:
 		vk::Viewport viewport,
 		vk::Rect2D scissor);
 
-	void RenderTextOverlay(GfxFrame const& frame, vk::Rect2D renderArea, vk::CommandBuffer const& commands);
+	vk::CommandBuffer RenderTextOverlay(GfxFrame const& frame, vk::Rect2D renderArea);
 
 private:
 	void UpdateTextOverlay(vk::Device device, vk::Extent2D frameBufferDim);
@@ -32,13 +32,14 @@ private:
 		vk::PipelineLayout pipelineLayout);
 
 	stb_fontchar stbFontData[STB_FONT_consolas_24_latin1_NUM_CHARS];
-	vk::raii::CommandBuffers textOverlayCommandBuffers;
 	GfxImage textImage;
 	vk::raii::Sampler sampler;
 	vk::raii::DescriptorPool descriptorPool;
 	vk::raii::DescriptorSetLayout overlayDescriptorLayout;
 	vk::raii::PipelineLayout overlayLayout;
 	vk::raii::DescriptorSet overlaySet;
+	vk::raii::CommandBuffer commandBuffer;
+	vk::raii::CommandPool commandPool;
 	vk::raii::RenderPass overlayRenderPass;
 	vk::raii::Pipeline overlayPipeline;
 	GfxBuffer overlayVertexBuffer;

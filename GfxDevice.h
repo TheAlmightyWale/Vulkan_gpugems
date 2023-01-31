@@ -12,7 +12,8 @@ public:
 	~GfxDevice();
 
 	vk::raii::CommandPool CreateGraphicsCommandPool();
-	vk::raii::CommandBuffers CreateCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers);
+	vk::raii::CommandBuffers CreatePrimaryCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers);
+	vk::raii::CommandBuffers CreateSecondaryCommandBuffers(vk::CommandPool commandPool, uint32_t numBuffers);
 	void UploadBufferData(size_t bytesToUpload, size_t bufferOffset, vk::Buffer copyFromBuffer, vk::WriteDescriptorSet writeDescriptor);
 	void UploadImageData(vk::CommandPool commandPool, vk::Queue submitQueue, GfxImage const& image, GfxBuffer const& imageData);
 	GfxSwapchain CreateSwapChain(vk::SurfaceKHR const& surface, uint32_t desiredSwapchainSize);

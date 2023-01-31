@@ -39,9 +39,11 @@ public:
 protected:
 	GfxFrame& GetCurrentFrame();
 
+	size_t PrepModelData(std::span<StaticModelPtr_t> models, size_t writeOffset);
+
 	size_t PrepObjectDataForUpload();
-	void UploadObjectDataToGpu();
-	void UploadFrameDataToGpu();
+	void UploadObjectDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager);
+	void UploadFrameDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager);
 
 private:
 
@@ -76,6 +78,8 @@ private:
 	std::shared_ptr<Camera> m_pCamera;
 	GfxDescriptorManagerPtr_t m_pDescriptorManager;
 	GfxDescriptorManagerPtr_t m_pGoochDescriptorManager;
+	GfxBuffer m_goochObjectDataBuffer;
+	GfxBuffer m_goochFrameDataBuffer;
 	GfxBuffer m_frameDataBuffer;
 	GfxBuffer m_objectDataBuffer;
 	std::shared_ptr<ObjectProcessor> m_pObjectProcessor;

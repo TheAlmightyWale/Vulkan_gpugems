@@ -82,8 +82,8 @@ TerrainGenerator::TerrainGenerator(GfxDevicePtr_t pDevice, vk::Viewport viewport
 
 	//Set up commands
 	m_graphicsCommandPool = pDevice->CreateGraphicsCommandPool();
-	m_renderCommandBuffer = std::move(pDevice->CreateCommandBuffers(*m_graphicsCommandPool, 1).front());
-	m_generateCommandBuffer = std::move(pDevice->CreateCommandBuffers(*m_graphicsCommandPool, 1).front());
+	m_renderCommandBuffer = std::move(pDevice->CreateSecondaryCommandBuffers(*m_graphicsCommandPool, 1).front());
+	m_generateCommandBuffer = std::move(pDevice->CreatePrimaryCommandBuffers(*m_graphicsCommandPool, 1).front());
 
 	//Set up terrain voxels
 	//For now we just create a grid at 0,0,0 that is 10 x 10 x 10
@@ -123,7 +123,7 @@ TerrainGenerator::TerrainGenerator(GfxDevicePtr_t pDevice, vk::Viewport viewport
 	pDevice->UploadBufferData(outputBufferSize, 0, *m_pOutputBuffer->m_buffer, writeDescriptor);
 }
 
-vk::CommandBuffer TerrainGenerator::Render(vk::RenderPass renderPass, vk::RenderPassBeginInfo passBeginInfo, GfxDevicePtr_t pDevice)
+vk::CommandBuffer TerrainGenerator::Render(GfxDevicePtr_t pDevice)
 {
 	m_graphicsCommandPool.reset();
 	//Terrain generation algorithim is as follows
@@ -137,7 +137,6 @@ vk::CommandBuffer TerrainGenerator::Render(vk::RenderPass renderPass, vk::Render
 	pDevice->UploadBufferData(sizeof(glm::mat4), 0, *m_pInputBuffer->m_buffer, writeDescriptor);
 
 	//Run compute shader to generate grid values
-
 	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	m_generateCommandBuffer.begin(beginInfo);
 
@@ -155,14 +154,10 @@ vk::CommandBuffer TerrainGenerator::Render(vk::RenderPass renderPass, vk::Render
 	//Wait on compute shader to complete
 	//TODO barrier
 
-	m_generateCommandBuffer.beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
-
 	//Feed grid values to mesh shader
 	//Use mesh shader to generate terrain
 
 	//Draw visible terrain with fragment shader
-
-	m_generateCommandBuffer.endRenderPass();
 
 	m_generateCommandBuffer.end();
 	return *m_generateCommandBuffer;
@@ -202,7 +197,7 @@ bool TerrainGenerator::ReadyToRender()
 	return !m_vertices.empty();
 }
 
-vk::CommandBuffer TerrainGenerator::RenderTerrain(vk::RenderPass renderPass, vk::RenderPassBeginInfo passBeginInfo, GfxDevicePtr_t pDevice, Camera const& camera)
+vk::CommandBuffer TerrainGenerator::RenderTerrain(vk::CommandBufferInheritanceInfo const* pInheritanceInfo, GfxDevicePtr_t pDevice, Camera const& camera)
 {
 	//upload vertex buffer to gpu
 	size_t const k_vertexBufferSize = m_vertices.size() * sizeof(TerrainVertex);
@@ -210,10 +205,10 @@ vk::CommandBuffer TerrainGenerator::RenderTerrain(vk::RenderPass renderPass, vk:
 	m_pVertexBuffer->CopyToBuffer(m_vertices.data(), k_vertexBufferSize, 0);
 
 	//Draw terrain in render pass
-	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+	vk::CommandBufferBeginInfo const beginInfo(
+		vk::CommandBufferUsageFlagBits::eRenderPassContinue | vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+		pInheritanceInfo);
 	m_renderCommandBuffer.begin(beginInfo);
-
-	m_renderCommandBuffer.beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
 
 	m_renderCommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_pPipeline->pipeline);
 	m_renderCommandBuffer.bindVertexBuffers(0, *m_pVertexBuffer->m_buffer, { 0 });
@@ -224,7 +219,6 @@ vk::CommandBuffer TerrainGenerator::RenderTerrain(vk::RenderPass renderPass, vk:
 	//Draw vertices
 	m_renderCommandBuffer.draw(m_vertices.size(), 1, 0, 0);
 
-	m_renderCommandBuffer.endRenderPass();
 	m_renderCommandBuffer.end();
 	return *m_renderCommandBuffer;
 }

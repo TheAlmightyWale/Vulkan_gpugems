@@ -201,6 +201,7 @@
     <ClCompile Include="GfxDevice.cpp" />
     <ClCompile Include="GfxEngine.cpp" />
     <ClCompile Include="GfxPipelineBuilder.cpp" />
+    <ClCompile Include="GfxStaticModelDrawer.cpp" />
     <ClCompile Include="GfxTextOverlay.cpp" />
     <ClCompile Include="ImageLoader.cpp" />
     <ClCompile Include="InputManager.cpp" />
@@ -242,6 +243,7 @@
     <ClInclude Include="GfxImage.h" />
     <ClInclude Include="GfxPipeline.h" />
     <ClInclude Include="GfxPipelineBuilder.h" />
+    <ClInclude Include="GfxStaticModelDrawer.h" />
     <ClInclude Include="GfxSwapChain.h" />
     <ClInclude Include="GfxTextOverlay.h" />
     <ClInclude Include="ImageLoader.h" />

@@ -132,6 +132,9 @@
     <ClCompile Include="ShaderLoader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="GfxStaticModelDrawer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math.h">
@@ -227,6 +230,9 @@
     <ClInclude Include="MarchingCubeTables.h">
       <Filter>TerrainGeneration</Filter>
     </ClInclude>
+    <ClInclude Include="GfxStaticModelDrawer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="triangle.vert">
@@ -253,5 +259,6 @@
     <CustomBuild Include="blinnPhong.vert">
       <Filter>Resource Files\Shaders</Filter>
     </CustomBuild>
+    <CustomBuild Include="densityGenerator.comp" />
   </ItemGroup>
 </Project>
