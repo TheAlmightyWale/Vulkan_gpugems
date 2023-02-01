@@ -388,11 +388,11 @@ void GfxEngine::Render()
 	vk::RenderPassBeginInfo passBeginInfo(*m_renderPass, *frame.frameBuffer, renderArea, clearValues);
 
 	//Copy data to gpu before binding descriptor set
-	UploadFrameDataToGpu(m_pDescriptorManager);
-	UploadObjectDataToGpu(m_pDescriptorManager);
+	UploadFrameDataToGpu(m_pDescriptorManager, m_frameDataBuffer);
+	UploadObjectDataToGpu(m_pDescriptorManager, {m_models.begin(), m_models.begin() + k_modelCount}, m_objectDataBuffer);
 
-	UploadFrameDataToGpu(m_pGoochDescriptorManager);
-	UploadObjectDataToGpu(m_pGoochDescriptorManager);
+	UploadFrameDataToGpu(m_pGoochDescriptorManager, m_goochFrameDataBuffer);
+	UploadObjectDataToGpu(m_pGoochDescriptorManager, {m_models.begin() + k_modelCount, m_models.end()}, m_goochObjectDataBuffer);
 
 	vk::CommandBufferBeginInfo const beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	frame.commandBuffers[0].begin(beginInfo);
@@ -446,43 +446,46 @@ GfxFrame& GfxEngine::GetCurrentFrame()
 	return m_frames[m_numFramesRendered % k_numFramesBuffered];
 }
 
-size_t GfxEngine::PrepModelData(std::span<StaticModelPtr_t> models, size_t writeOffset)
+size_t GfxEngine::PrepModelData(std::span<StaticModelPtr_t> models, size_t writeOffset, GfxBuffer& buffer)
 {
 	for (auto const& model : models)
 	{
-		writeOffset = m_objectDataBuffer.CopyToBuffer(&model->GetTransform(), sizeof(ObjectData), writeOffset);
+		writeOffset = buffer.CopyToBuffer(&model->GetTransform(), sizeof(ObjectData), writeOffset);
 	}
 
 	return writeOffset;
 }
 
-size_t GfxEngine::PrepObjectDataForUpload()
+size_t GfxEngine::PrepObjectDataForUpload(std::span<StaticModelPtr_t> const& objects, GfxBuffer& buffer)
 {
 	//First upload Camera data
-	size_t writeOffset = m_objectDataBuffer.CopyToBuffer(&m_pCamera->GetViewProj(), sizeof(CameraShaderData), 0);
+	size_t writeOffset = buffer.CopyToBuffer(&m_pCamera->GetViewProj(), sizeof(CameraShaderData), 0);
 
 	//Upload Model transforms at the start of every frame
-	writeOffset = PrepModelData({ m_models.begin(), m_models.end() }, writeOffset);
+	writeOffset = PrepModelData({ objects.begin(), objects.end() }, writeOffset, buffer);
 
 	//TODO Currently have no way of knowing where the starting offset of copyToBuffer is
 	// which will be needed once this buffer copy gets shared between more than just this function
 	return writeOffset;
 }
 
-void GfxEngine::UploadObjectDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager)
+void GfxEngine::UploadObjectDataToGpu(
+	GfxDescriptorManagerPtr_t const& pDescriptorManager,
+	std::span<StaticModelPtr_t> const& objects,
+	GfxBuffer& buffer)
 {
-	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload();
+	size_t totalObjectDataBytesToUpload = PrepObjectDataForUpload(objects, buffer);
 	vk::WriteDescriptorSet writeDescriptor = pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerModel, k_objectDataBindingId);
-	m_pDevice->UploadBufferData(totalObjectDataBytesToUpload, 0, *m_objectDataBuffer.m_buffer, writeDescriptor);
+	m_pDevice->UploadBufferData(totalObjectDataBytesToUpload, 0, *buffer.m_buffer, writeDescriptor);
 }
 
-void GfxEngine::UploadFrameDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager)
+void GfxEngine::UploadFrameDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager, GfxBuffer& buffer)
 {
 	FrameData data;
 	data.directionalLight = glm::vec4(k_light, 1.0f);
 	data.cameraPosition = glm::vec4(m_pCamera->GetPosition(), 1.0f);
-	m_frameDataBuffer.CopyToBuffer(&data, sizeof(FrameData), 0);
+	buffer.CopyToBuffer(&data, sizeof(FrameData), 0);
 
 	vk::WriteDescriptorSet writeDescriptor = pDescriptorManager->GetWriteDescriptor(DataUsageFrequency::ePerFrame, k_objectDataBindingId);
-	m_pDevice->UploadBufferData(sizeof(FrameData), 0, *m_frameDataBuffer.m_buffer, writeDescriptor);
+	m_pDevice->UploadBufferData(sizeof(FrameData), 0, *buffer.m_buffer, writeDescriptor);
 }

@@ -39,11 +39,12 @@ public:
 protected:
 	GfxFrame& GetCurrentFrame();
 
-	size_t PrepModelData(std::span<StaticModelPtr_t> models, size_t writeOffset);
+	size_t PrepModelData(std::span<StaticModelPtr_t> models, size_t writeOffset, GfxBuffer& buffer);
+	size_t PrepObjectDataForUpload(std::span<StaticModelPtr_t> const& objects, GfxBuffer& buffer);
+	void UploadObjectDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager, std::span<StaticModelPtr_t> const& objects, GfxBuffer& buffer);
+	void UploadFrameDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager, GfxBuffer& buffer);
 
-	size_t PrepObjectDataForUpload();
-	void UploadObjectDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager);
-	void UploadFrameDataToGpu(GfxDescriptorManagerPtr_t const& pDescriptorManager);
+
 
 private:
 
